@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import json
 
 from mcp.server.mcpserver import MCPServer
 
@@ -138,6 +139,27 @@ def recent_events(count: int = 5) -> str:
         f"{e.level.name}: " + " ".join(e.reasons) for e in entries
     ]
     return " | ".join(lines)
+
+@mcp.tool()
+def get_scene() -> str:
+    """Return the map as JSON: robot pose, named places, forbidden zones.
+
+    For screens, not for speech. Do not read this out loud.
+    """
+    s = robot.get_state()
+    scene = {
+        "robot": {"x": s.pose.x, "y": s.pose.y, "yaw": s.pose.yaw,
+                  "moving": s.moving, "voltage": round(s.voltage, 1),
+                  "localized": s.localized},
+        "places": [{"name": n, "x": p.x, "y": p.y}
+                   for n, p in robot.places().items()],
+        "zones": [{"name": z.name,
+                   "polygon": [{"x": p.x, "y": p.y} for p in z.polygon]}
+                  for z in gate.config.zones],
+        "path": [{"x": p.x, "y": p.y} for p in
+                 (robot.current_path if hasattr(robot, "current_path") else [])],
+    }
+    return json.dumps(scene)
 
 
 if __name__ == "__main__":
