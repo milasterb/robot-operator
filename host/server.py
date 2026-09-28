@@ -61,4 +61,4 @@ async def index() -> FileResponse:
     return FileResponse(STATIC / "index.html")
 
 
-app.mount("/", StaticFiles(directory=STATIC), name="static")
+app.mount("/static", StaticFiles(directory=STATIC), name="static")

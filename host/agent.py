@@ -7,7 +7,7 @@ import boto3
 
 from .mcp_client import MCPClient, Tool
 
-MODEL_ID = "anthropic.claude-haiku-4-5-20251001-v1:0"
+MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 AWS_PROFILE = "alexa-ai-user"
 AWS_REGION = "us-west-2"
 MAX_ROUNDS = 6
