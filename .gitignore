@@ -1,1 +1,13 @@
 .venv/
+[200~# generated
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.deb
+# generated
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.deb
