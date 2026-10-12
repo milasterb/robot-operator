@@ -125,20 +125,28 @@ first.
 
 | Rule | STOP when | LIMIT when |
 |---|---|---|
-| Battery | mean voltage below 10.8 V | below 11.4 V |
-| Clearance | narrowest point < 1.1 × robot width | < 1.5 × robot width |
-| Obstacle | something within 0.30 m right now | — |
-| Stale state | telemetry older than 2 s | — |
-| Localisation | the robot does not know where it is | — |
-| Forbidden zone | the goal is inside one | — |
-| Charger | leaving the charger on a low battery | — |
+| `check_state_age` | telemetry is older than 2 s | — |
+| `check_localization` | the robot does not know where it is | — |
+| `check_battery` | mean voltage below 10.8 V | below 11.4 V |
+| `check_plan` | the planner returned no route | — |
+| `check_zones` | the goal is inside a forbidden zone | — |
+| `check_clearance` | narrowest point < 1.1 × robot width | < 1.5 × robot width |
+| `check_obstacle` | something within 0.30 m right now | — |
 
-Two details that are not obvious from the table:
+Three details that are not obvious from the table:
 
 **Voltage is a rolling mean, not a reading.** A motor starting up drops the
 pack by half a volt for a moment. Gating on the instantaneous value would make
 the robot refuse to move at exactly the moment it starts moving. The raw value
 is still carried in `RobotState.voltage_raw` so it can be shown and logged.
+
+**A flat battery does not strand the robot.** Below 10.8 V every trip is
+refused — except one. A move whose goal is the charger is allowed, at reduced
+speed, with the reason said out loud. The alternative is a gate that is
+correct and useless: a robot that has decided it is too low on power to move,
+and therefore cannot reach the thing that would fix that. The exception lives
+inside `check_battery` rather than in a rule of its own, because it is a
+property of the battery rule and nothing else.
 
 **Verdicts have hysteresis.** Without it, a robot sitting at 10.79 V flips
 between STOP and LIMIT with every reading and the light bar strobes. The
@@ -186,8 +194,8 @@ say.
 
 Driving the strip needs a small change to Yahboom's own driver node, which
 does not expose the LEDs on a topic. The change is in
-[`patches/Mcnamu_driver_X3.patch`](patches/) — it adds a `/gate_light`
-subscriber taking `std_msgs/ColorRGBA`, and nothing else.
+[`patches/`](patches/) — it adds a `/gate_light` subscriber taking
+`std_msgs/ColorRGBA`, and nothing else.
 
 ---
 
@@ -196,7 +204,7 @@ subscriber taking `std_msgs/ColorRGBA`, and nothing else.
 Requires Python 3.10+ and an AWS account with Bedrock access.
 
 ```bash
-git clone <this repo> && cd robot-operator
+git clone https://github.com/milasterb/robot-operator && cd robot-operator
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -258,7 +266,8 @@ not been seen working:
 | "drive to the front door" | **STOP** | 0.18 m gap, too narrow to fit |
 | "go to the bedroom" | **STOP** | inside the corridor |
 
-Set `robot.voltage = 10.5` to see the battery rules fire.
+Set `robot.voltage = 10.5` to see the battery rules fire, including the
+exception for the charger.
 
 ---
 
@@ -310,6 +319,7 @@ patches/       the change to Yahboom's driver node
 tests/         gate tests
 server.py      the MCP server and its eight tools
 FRICTION_LOG.md
+PRODUCT_FEEDBACK.md
 ```
 
 ## Licence
