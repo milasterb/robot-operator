@@ -1,0 +1,39 @@
+--- a/yahboomcar_bringup/yahboomcar_bringup/Mcnamu_driver_X3.py
++++ b/yahboomcar_bringup/yahboomcar_bringup/Mcnamu_driver_X3.py
+@@ -13,7 +13,7 @@
+ #ros lib
+ import rclpy
+ from rclpy.node import Node
+-from std_msgs.msg import String,Float32,Int32,Bool
++from std_msgs.msg import String,Float32,Int32,Bool,ColorRGBA
+ from geometry_msgs.msg import Twist
+ from sensor_msgs.msg import Imu,MagneticField, JointState
+ from rclpy.clock import Clock
+@@ -55,6 +55,10 @@
+ 		self.sub_cmd_vel = self.create_subscription(Twist,"cmd_vel",self.cmd_vel_callback,1)
+ 		self.sub_RGBLight = self.create_subscription(Int32,"RGBLight",self.RGBLightcallback,100)
+ 		self.sub_BUzzer = self.create_subscription(Bool,"Buzzer",self.Buzzercallback,100)
++		# Added for Robot Operator: the safety gate's verdict, shown on the
++		# light bar. The stock RGBLight topic only selects Yahboom's canned
++		# effects, so it cannot carry an arbitrary colour.
++		self.sub_GateLight = self.create_subscription(ColorRGBA,"gate_light",self.GateLightcallback,10)
+ 
+ 		#create publisher
+ 		self.EdiPublisher = self.create_publisher(Float32,"edition",100)
+@@ -93,6 +97,16 @@
+ 		if not isinstance(msg, Int32): return
+ 		# print ("RGBLight: ", msg.data)
+ 		for i in range(3): self.car.set_colorful_effect(msg.data, 6, parm=1)
++	def GateLightcallback(self,msg):
++		# Safety-gate status colour. ColorRGBA carries floats in 0..1; the
++		# board wants bytes. Alpha scales brightness so one colour can be
++		# shown dim (idle) or full (a verdict).
++		if not isinstance(msg, ColorRGBA): return
++		scale = msg.a if 0.0 <= msg.a <= 1.0 else 1.0
++		r = max(0, min(255, int(msg.r * scale * 255)))
++		g = max(0, min(255, int(msg.g * scale * 255)))
++		b = max(0, min(255, int(msg.b * scale * 255)))
++		self.car.set_colorful_lamps(0xFF, r, g, b)
+ 	def Buzzercallback(self,msg):
+ 		if not isinstance(msg, Bool): return
+ 		if msg.data:

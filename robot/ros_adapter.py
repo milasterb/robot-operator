@@ -10,6 +10,7 @@ import roslibpy
 import roslibpy.actionlib
 
 from gate.types import MoveProposal, Point, Pose, RobotState
+from robot.lights import LightBar, Level as LightLevel
 
 VOLTAGE_WINDOW = 5.0  # seconds of readings to average
 
@@ -42,6 +43,8 @@ class RosRobot:
         self._current_goal = None
         self._current_path: list[Point] = []
         self._nav_client = None
+        self._light_topic = None
+        self.lights: LightBar | None = None
 
     # ---- lifecycle ----------------------------------------------------
 
@@ -65,7 +68,27 @@ class RosRobot:
             self.ros, "/navigate_to_pose", "nav2_msgs/NavigateToPose"
         )
 
+        # The light bar needs a patched Yahboom driver; see
+        # patches/Mcnamu_driver_X3.patch. Without it /gate_light has no
+        # subscriber and these publishes go nowhere, which is harmless.
+        self._light_topic = roslibpy.Topic(
+            self.ros, "/gate_light", "std_msgs/ColorRGBA"
+        )
+        self.lights = LightBar(self._publish_colour)
+
+    def _publish_colour(self, r: float, g: float, b: float, a: float) -> None:
+        if self._light_topic is not None and self.ros.is_connected:
+            self._light_topic.publish(
+                roslibpy.Message({"r": r, "g": g, "b": b, "a": a})
+            )
+
+    def set_light(self, level: LightLevel) -> None:
+        if self.lights is not None:
+            self.lights.set(level)
+
     def close(self) -> None:
+        if self.lights is not None:
+            self.lights.close()
         if self.ros.is_connected:
             self.ros.terminate()
 
