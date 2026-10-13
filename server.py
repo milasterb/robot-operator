@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 
 from mcp.server.mcpserver import MCPServer
@@ -12,20 +13,48 @@ from robot.adapter import FakeRobot
 from robot.lights import Level as LightLevel
 from robot.tokens import TokenError, TokenStore
 
-# The corridor: the robot loses its localisation in there, because the LiDAR
-# sees two parallel walls and cannot tell how far along them it has driven.
-# This is a real limit of this machine in this flat, measured rather than
-# imagined, which is what makes it a good thing for the gate to enforce.
-CORRIDOR = Zone(
-    "the corridor",
-    [Point(3.5, 1.1), Point(5.0, 1.1), Point(5.0, 5.0), Point(3.5, 5.0)],
+# The corner of the living room with the treadmill and the desk somebody
+# works at. Two independent reasons to keep the robot out, and only one of
+# them is visible to the robot: the treadmill leaves no clear way through,
+# and a person sits there. The map cannot see the person. That is exactly
+# the kind of thing an operator knows and a model cannot, which is why it
+# belongs in the gate and not in a prompt.
+#
+# Coordinates are in the frame of maps/obyvak_final.yaml. The box is wide
+# enough that a goal inside it is reachable: Nav2 will happily plan a route
+# there, and the gate refuses it anyway. A zone the planner cannot reach
+# would produce the wrong refusal for the right reason.
+TREADMILL = Zone(
+    "the treadmill area",
+    [
+        Point(1.00, -1.50),
+        Point(2.30, -1.50),
+        Point(2.30, -0.35),
+        Point(1.00, -0.35),
+    ],
 )
 
-robot = FakeRobot()
-gate = Gate(GateConfig(robot_width=0.20, zones=[CORRIDOR]))
+# Set ROBOT_HOST to the robot's address to drive the real thing:
+#     ROBOT_HOST=192.168.1.42 python server.py
+# Without it the server runs against the in-memory robot, which is how the
+# tools and the panel get developed without hardware.
+ROBOT_HOST = os.environ.get("ROBOT_HOST")
+
+if ROBOT_HOST:
+    from robot.ros_adapter import RosRobot
+
+    robot = RosRobot(ROBOT_HOST)
+    robot.connect()
+else:
+    robot = FakeRobot()
+
+# robot_width is the one number here that is not measured from the map.
+# Measure the X3 across its widest point, wheels included, before trusting
+# the clearance rules: they are both derived from it.
+gate = Gate(GateConfig(robot_width=0.20, zones=[TREADMILL]))
 tokens = TokenStore()
 
-mcp = MCPServer("robot-operator", version="0.3.0")
+mcp = MCPServer("robot-operator", version="0.4.0")
 
 
 def _resolve(place: str) -> tuple[str, Point]:

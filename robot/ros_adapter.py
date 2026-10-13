@@ -23,11 +23,18 @@ class RosRobot:
     a RobotState and a MoveProposal.
     """
 
-    # Named destinations, in map coordinates. Fill these in once the map
-    # and localisation are trustworthy.
+    # Named destinations, in the coordinates of maps/obyvak_final.yaml.
+    # Measured from the map, not guessed: each one sits in open floor with
+    # room for the robot to turn around. Rename them to whatever you would
+    # actually say out loud; only the coordinates matter to the gate.
     PLACES: dict[str, Point] = {
-        "the charger": Point(0.0, 0.0),
-        "the living room": Point(2.0, 0.0),
+        "my room": Point(-0.35, 0.00),       # 0.70 m clear around it
+        "the living room": Point(2.30, 0.15),  # 0.87 m
+        "the window": Point(3.45, 0.35),     # 0.96 m, the most open spot
+        # Inside the forbidden zone. It is a real, reachable place — Nav2
+        # will plan a route to it — which is the point: the gate refuses it
+        # on its own authority, not because the planner failed.
+        "the treadmill": Point(2.00, -0.42),
     }
 
     def __init__(self, host: str, port: int = 9090) -> None:
