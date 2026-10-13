@@ -30,7 +30,6 @@ class RosRobot:
     PLACES: dict[str, Point] = {
         "my room": Point(-0.35, 0.00),       # 0.70 m clear around it
         "the living room": Point(2.30, 0.15),  # 0.87 m
-        "the window": Point(3.45, 0.35),     # 0.96 m, the most open spot
         # Inside the forbidden zone. It is a real, reachable place — Nav2
         # will plan a route to it — which is the point: the gate refuses it
         # on its own authority, not because the planner failed.
