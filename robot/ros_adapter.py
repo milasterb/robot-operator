@@ -12,7 +12,15 @@ import roslibpy.actionlib
 from gate.types import MoveProposal, Point, Pose, RobotState
 from robot.lights import LightBar, Level as LightLevel
 
-VOLTAGE_WINDOW = 5.0  # seconds of readings to average
+VOLTAGE_WINDOW = 5.0        # seconds of readings to average
+
+# What counts as knowing where you are. AMCL publishes a 6x6 covariance;
+# the square roots of its diagonal are standard deviations in metres and
+# radians. Half a metre and about thirty degrees is the point past which
+# the robot's own estimate is too vague to drive on.
+AMCL_POSITION_STD = 0.50    # metres
+AMCL_YAW_STD = 0.52         # radians, about 30 degrees
+AMCL_MAX_AGE_MOVING = 5.0   # seconds; see get_state for why only moving
 
 
 class RosRobot:
@@ -25,10 +33,9 @@ class RosRobot:
 
     # Named destinations, in the coordinates of maps/obyvak_final.yaml.
     # Measured from the map, not guessed: each one sits in open floor with
-    # room for the robot to turn around. Rename them to whatever you would
-    # actually say out loud; only the coordinates matter to the gate.
+    # room for the robot to turn around.
     PLACES: dict[str, Point] = {
-        "my room": Point(-0.35, 0.00),       # 0.70 m clear around it
+        "my room": Point(-0.35, 0.00),         # 0.70 m clear around it
         "the living room": Point(2.30, 0.15),  # 0.87 m
         # Inside the forbidden zone. It is a real, reachable place — Nav2
         # will plan a route to it — which is the point: the gate refuses it
@@ -41,7 +48,9 @@ class RosRobot:
         self._lock = threading.Lock()
 
         self._voltages: deque[tuple[float, float]] = deque()  # (time, volts)
-        self._pose = Pose(0.0, 0.0, 0.0)
+        self._pose = Pose(0.0, 0.0, 0.0)   # map frame, from AMCL
+        self._amcl_at = 0.0                # when the last AMCL pose arrived
+        self._amcl_ok = False              # was its covariance tight enough
         self._nearest = float("inf")
         self._moving = False
         self._last_update = 0.0
@@ -62,9 +71,14 @@ class RosRobot:
         roslibpy.Topic(self.ros, "/voltage", "std_msgs/Float32").subscribe(
             self._on_voltage
         )
+        # Odometry is only good for "is it moving". Its frame drifts, and the
+        # named places are in the map frame, so the position comes from AMCL.
         roslibpy.Topic(self.ros, "/odom", "nav_msgs/Odometry").subscribe(
             self._on_odom
         )
+        roslibpy.Topic(
+            self.ros, "/amcl_pose", "geometry_msgs/PoseWithCovarianceStamped"
+        ).subscribe(self._on_amcl)
         roslibpy.Topic(
             self.ros, "/scan", "sensor_msgs/LaserScan",
             throttle_rate=200, queue_length=1,
@@ -109,18 +123,37 @@ class RosRobot:
             self._last_update = now
 
     def _on_odom(self, msg: dict) -> None:
+        """Only the velocity is used. The position here is in the odom frame,
+        which drifts away from the map, and everything the gate reasons about
+        — places, zones — is in the map frame."""
+        v = msg["twist"]["twist"]["linear"]
+        speed = math.hypot(v["x"], v["y"])
+        with self._lock:
+            self._moving = speed > 0.02
+            self._last_update = time.monotonic()
+
+    def _on_amcl(self, msg: dict) -> None:
+        """Position in the map frame, and how sure AMCL is about it."""
         p = msg["pose"]["pose"]["position"]
         q = msg["pose"]["pose"]["orientation"]
         yaw = math.atan2(
             2.0 * (q["w"] * q["z"] + q["x"] * q["y"]),
             1.0 - 2.0 * (q["y"] ** 2 + q["z"] ** 2),
         )
-        v = msg["twist"]["twist"]["linear"]
-        speed = math.hypot(v["x"], v["y"])
+        cov = msg["pose"]["covariance"]  # 6x6, row major
+        std_x = math.sqrt(max(0.0, cov[0]))
+        std_y = math.sqrt(max(0.0, cov[7]))
+        std_yaw = math.sqrt(max(0.0, cov[35]))
+
+        now = time.monotonic()
         with self._lock:
             self._pose = Pose(p["x"], p["y"], yaw)
-            self._moving = speed > 0.02
-            self._last_update = time.monotonic()
+            self._amcl_at = now
+            self._amcl_ok = (
+                max(std_x, std_y) <= AMCL_POSITION_STD
+                and std_yaw <= AMCL_YAW_STD
+            )
+            self._last_update = now
 
     def _on_scan(self, msg: dict) -> None:
         good = [
@@ -141,9 +174,30 @@ class RosRobot:
                 pose=self._pose,
                 nearest_obstacle=self._nearest,
                 moving=self._moving,
-                localized=bool(readings),  # replaced by AMCL covariance later
+                localized=self._is_localized(),
                 timestamp=self._last_update,
             )
+
+    def _is_localized(self) -> bool:
+        """Does the robot know where it is? Call with the lock held.
+
+        Three ways to answer no: AMCL has never spoken, so there is no map
+        pose at all and no amount of odometry substitutes for one; its last
+        covariance was too loose to drive on; or it has gone quiet while the
+        robot is moving, which means the pose on file is not where the robot
+        is any more.
+
+        The staleness check only applies while moving on purpose. A parked
+        robot gives AMCL nothing to update from, so it stops publishing —
+        treating that silence as being lost would refuse every trip that
+        starts after a pause. Stale telemetry in general is the gate's own
+        max_state_age rule, fed by the other topics.
+        """
+        if self._amcl_at == 0.0 or not self._amcl_ok:
+            return False
+        if self._moving:
+            return (time.monotonic() - self._amcl_at) <= AMCL_MAX_AGE_MOVING
+        return True
 
     def places(self) -> dict[str, Point]:
         return dict(self.PLACES)
