@@ -9,11 +9,19 @@ not available to participants.
 
 Entries are in the order I hit them. Times are Europe/Prague.
 
+**Severity** is how much of the project the entry put at risk, not how annoying
+it felt: *Blocking* means the intended path could not be taken at all and the
+design had to change; *High* means a day or more lost to an error that pointed
+somewhere other than its cause; *Medium* means real time lost with a workaround
+available; *Low* means recorded for the next person rather than costly to me.
+
 ---
 
 ## 1. The Alexa+ Developer Console is advertised but not open
 
 **2026-09-21**
+
+**Severity.** High — A dead end advertised as a starting point. Recoverable, but only after you stop trusting the dashboard.
 
 **What I did.** Signed up at developer.amazon.com, finished the Sole
 Proprietorship details and identity check, and followed the dashboard link
@@ -40,6 +48,8 @@ obvious conclusion — that they did something wrong — costs time.
 
 **2026-09-21**
 
+**Severity.** Medium — Unavoidable latency, but undocumented. Costs a day of a fixed-deadline event.
+
 **What I did.** Started "Set up your development environment," which requires
 an AWS account in order to assume a role and reach the CLI package.
 
@@ -63,6 +73,8 @@ everyone else.
 ## 3. The setup guide walks you into a role you are not allowed to assume
 
 **2026-09-25**
+
+**Severity.** High — The guide's own steps, followed exactly, cannot succeed. Two days lost before entry 4 explained why.
 
 **What I did.** Followed the CLI installation steps exactly: created an IAM
 user, attached an inline policy allowing `sts:AssumeRole` on
@@ -103,6 +115,8 @@ and will keep trying.
 
 **2026-09-25**
 
+**Severity.** Blocking — Changed the architecture of the project. Everything downstream of it is a workaround.
+
 **What I did.** Asked in the hackathon's Discussions whether participants can
 get toolkit access or an official Alexa+ simulator, so I could test account
 linking and MCP App rendering on the real surface.
@@ -128,6 +142,8 @@ one who spent them.
 ## 5. Amazon's MCP examples use an API that pip no longer installs
 
 **2026-09-21**
+
+**Severity.** Medium — Sample code fails on first import, but the SDK's error message makes it a ten-minute fix.
 
 **What I did.** `pip install "mcp[cli]"`, then wrote a server following the
 shape used in the Alexa+ MCP examples: `from mcp.server.fastmcp import FastMCP`.
@@ -155,6 +171,8 @@ installing today gets v2 and the sample code fails on its first import.
 ## 6. Bedrock is gated behind a second, undocumented verification
 
 **2026-09-26, 16:14**
+
+**Severity.** High — Two further hours on top of a day already lost, with no warning anywhere before the call.
 
 **What I did.** With the AWS account finally active, added
 `bedrock:InvokeModel` and friends to my IAM user, confirmed
@@ -185,6 +203,8 @@ looks ready until the moment it matters.
 
 **2026-09-26, 16:12**
 
+**Severity.** Medium — Caught at save time, so cheap. Expensive only because it looked like the same class of problem as entries 3 and 6.
+
 **What I did.** Wrote an IAM policy granting `bedrock:Converse` and
 `bedrock:ConverseStream`, matching the API operation names.
 
@@ -204,6 +224,8 @@ obvious move and it is wrong.
 ## 8. ROS and Python tooling fight over PYTHONPATH
 
 **2026-09-26, 16:00**
+
+**Severity.** Low — Not Amazon's, and self-inflicted. Recorded because the cause is invisible from the error.
 
 **What I did.** Ran `pytest` in a virtualenv on a workstation that also
 sources ROS 2 in `.bashrc`.
@@ -227,6 +249,8 @@ the robot over rosbridge.
 
 **2026-09-26**
 
+**Severity.** Medium — Design friction rather than a defect, but it decides whether a voice agent is safe to put near a machine.
+
 **What I found.** Tool descriptions written the way one writes API docs
 produce the wrong behaviour in a voice agent. Two things had to be stated
 outright in the system prompt, because the model's default is to be useful:
@@ -249,6 +273,8 @@ when the tool call moves a machine.
 
 **2026-09-26**
 
+**Severity.** Medium — A real gap between what a voice surface needs and what the transport offers.
+
 **What I found.** The design calls for the robot to offer to drive to the
 charger when the battery gets low. A stateless Streamable HTTP server has no
 way to initiate that: it can only answer. The offer has to ride along with
@@ -261,6 +287,135 @@ has no path to their ears until they happen to ask a question.
 **Suggestion.** Document the intended pattern for add-ons that have something
 to say between turns, even if the answer is "attach it to the next response."
 Right now it reads like an omission rather than a decision.
+
+---
+
+## 11. A broken serial link reports 0.0 volts instead of failing
+
+**2026-10-12**
+
+**Severity.** High — A safety system was reading an invented number and could
+not tell. It happened to fail safe, by luck rather than design.
+
+**What I did.** Started the robot's ROS 2 bring-up to begin a mapping run.
+
+**What I expected.** Either working telemetry, or a loud failure.
+
+**What happened.** The driver's serial receive thread died with
+`serial.serialutil.SerialException: device reports readiness to read but
+returned no data (device disconnected or multiple access on port?)` — and the
+node carried on running. Battery voltage and IMU kept publishing, as 0.0. The
+IMU filter dutifully warned that the robot "seems to be in free fall".
+
+The cause, after an hour of looking in the wrong places, was a loose USB
+connector between the Raspberry Pi and the expansion board. The same symptom
+appears when two processes open the port (see entry 12), so the error text
+points at both causes at once and distinguishes neither.
+
+**How I worked around it.** Reseated and then taped down the connector. In the
+software, the gate reads 0.0 V as a flat battery and refuses every trip, so the
+failure is safe — but only because 0.0 happens to fall below the threshold, not
+because anything detected that the reading was fabricated.
+
+**Suggestion.** A driver that loses its input should stop publishing, or publish
+a value flagged as stale. Silently substituting zero is the worst available
+option for any consumer that makes decisions from the number — and on a robot,
+voltage and IMU are exactly such numbers. A diagnostic topic reporting the dead
+receive thread would also have turned an hour into a minute.
+
+---
+
+## 12. Two launch files start the same node, and nothing warns you
+
+**2026-10-13**
+
+**Severity.** Medium — An hour lost, and it produced the same error text as
+entry 11, so the two kept being mistaken for each other.
+
+**What I did.** Started `yahboomcar_bringup_X3_launch.py`, then
+`laser_bringup_launch.py` in a second terminal, then
+`map_gmapping_launch.py` in a third — reasoning that each adds a layer.
+
+**What I expected.** Three cooperating layers.
+
+**What happened.** Each of those launch files contains the full bring-up. With
+all three running there were three copies of every node, including three serial
+drivers contending for one port. `ros2 node list` shows it, but only if you
+think to look:
+
+```
+WARNING: Be aware that are nodes in the graph that share an exact name
+/driver_node
+/driver_node
+```
+
+Meanwhile `/map` published nothing and `map_saver_cli` timed out, which reads
+like a mapping problem rather than a duplication problem.
+
+**How I worked around it.** Run only `map_gmapping_launch.py`, which already
+contains the bring-up and the lidar.
+
+**Suggestion.** Nesting a full bring-up inside a higher-level launch file is
+reasonable, but it should be in the file's name or its first printed line.
+Right now the only way to know is to read the XML or count the processes.
+A launch system that refused to start a second node with an identical name, or
+at least escalated that warning, would make this self-correcting.
+
+---
+
+## 13. `map_saver_cli`'s timeout is an integer, in undocumented units
+
+**2026-10-13**
+
+**Severity.** Low — Two minutes, once you read the error properly.
+
+**What I did.** `ros2 run nav2_map_server map_saver_cli -f ~/maps/room` on a
+Raspberry Pi busy running SLAM. It failed with
+`Failed to save the map: timeout`, so I raised the timeout:
+`--ros-args -p save_map_timeout:=10.0`.
+
+**What happened.**
+
+```
+Unexpected problem appear: expected [integer] got [double]
+```
+
+The parameter is an integer, and it is in milliseconds, so the working value is
+`10000`. The default of 2000 is too short for a Pi that is simultaneously
+running gmapping.
+
+**How I worked around it.** `-p save_map_timeout:=10000`.
+
+**Suggestion.** Name it `save_map_timeout_ms`, or accept a double. And consider
+a longer default: the machines that run SLAM are often the slow ones.
+
+---
+
+## 14. AMCL goes quiet when the robot stops, which breaks the obvious check
+
+**2026-10-15**
+
+**Severity.** Medium — Not a defect, but a behaviour that makes the naive
+implementation of a safety rule wrong in a way that only shows up in use.
+
+**What I found.** My gate refuses to move a robot that does not know where it
+is, and the honest source for that is AMCL's covariance. The obvious
+implementation is "if the last `/amcl_pose` is older than N seconds, we are
+lost".
+
+That is wrong. AMCL updates its filter in response to motion, so a stationary
+robot gives it nothing to update from and it stops publishing. A staleness
+check would therefore declare the robot lost after every pause — meaning it
+would refuse every trip that starts from standstill, which is all of them.
+
+**How I worked around it.** The staleness limit applies only while the robot is
+moving. Parked, the last pose stands; moving, a pose older than five seconds
+means the estimate no longer describes where the robot is. General staleness is
+handled separately, from telemetry that does publish continuously.
+
+**Suggestion.** Document the publication conditions for `/amcl_pose` next to the
+message definition. "Published on filter update, which requires motion" is one
+line and saves anyone building a watchdog from shipping a wrong one.
 
 ---
 
