@@ -274,7 +274,7 @@ h2 {
     <h2>Map</h2>
     <div class="map-wrap">
       <canvas id="map"></canvas>
-      <div id="maphint">1 m grid</div>
+      <div id="maphint">1 m grid &nbsp;·&nbsp; occupancy map, 0.05 m/px</div>
     </div>
     <div id="telemetry">
       <div><div class="k">Battery</div><div class="v" id="volt">—</div></div>
@@ -309,6 +309,27 @@ const cv = $("map"), cx = cv.getContext("2d");
 let T = { s: 60, ox: 0, oy: 0 };
 const ROBOT_R = 0.10;           // metres, matches the Nav2 footprint
 
+/* The occupancy grid the robot actually navigates on, straight from
+   maps/obyvak_final.yaml. Walls and floor are drawn as a backdrop so the
+   named places and the forbidden zone sit in the real room rather than in
+   an empty coordinate system. */
+const MAP = {
+  res: 0.05,            // metres per pixel
+  origin: [-10, -10],   // world position of the image's bottom-left corner
+  size: [384, 384],     // pixels
+  // Bounding box of the cells that were actually surveyed. The grid is
+  // 19.2 m square and nearly all of it is unknown, so fitting the view to
+  // the whole image would shrink the flat to a smudge in the middle.
+  extent: { x0: -2.75, x1: 5.85, y0: -1.75, y1: 1.85 },
+};
+MAP.x1 = MAP.origin[0] + MAP.size[0] * MAP.res;
+MAP.y1 = MAP.origin[1] + MAP.size[1] * MAP.res;
+
+const mapImg = new Image();
+let mapReady = false;
+mapImg.onload = () => { mapReady = true; draw(); };
+mapImg.src = "/static/map_bg.png";
+
 let hazard = null;              // diagonal warning stripes, built once
 function hazardPattern() {
   if (hazard) return hazard;
@@ -332,8 +353,12 @@ function fit() {
   if (!scene) return;
   const pts = [...scene.places, scene.robot];
   (scene.zones || []).forEach(z => pts.push(...z.polygon));
+  // Keep the whole surveyed area in frame. Without this the view fits the
+  // places alone and crops the room they stand in, which reads as a bug.
+  const e = MAP.extent;
+  pts.push({ x: e.x0, y: e.y0 }, { x: e.x1, y: e.y1 });
   const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
-  const pad = 1.4;
+  const pad = 1.0;
   const spanX = Math.max(...xs) - Math.min(...xs) + pad * 2;
   const spanY = Math.max(...ys) - Math.min(...ys) + pad * 2;
   T.s = Math.min(w / spanX, h / spanY);
@@ -346,6 +371,18 @@ function draw() {
   const w = cv.clientWidth, h = cv.clientHeight;
   cx.clearRect(0, 0, w, h);
   if (!scene) return;
+
+  // the surveyed map, underneath everything else
+  if (mapReady) {
+    const [left, top] = px({ x: MAP.origin[0], y: MAP.y1 });
+    const [right, bottom] = px({ x: MAP.x1, y: MAP.origin[1] });
+    // Each cell is 5 cm and the view magnifies them well past 1:1.
+    // Smoothing would turn a measured grid into a watercolour; the hard
+    // squares are the honest look and read as survey data.
+    cx.imageSmoothingEnabled = false;
+    cx.drawImage(mapImg, left, top, right - left, bottom - top);
+    cx.imageSmoothingEnabled = true;
+  }
 
   // metre grid
   cx.strokeStyle = "rgba(255,255,255,.035)";
@@ -377,10 +414,19 @@ function draw() {
       { x: 0, y: 0 }
     );
     const [a, b] = px(c);
-    cx.fillStyle = "#f08a80";
+    const label = "No entry: " + z.name.replace(/^the /, "");
     cx.font = "500 12px 'IBM Plex Sans', sans-serif";
     cx.textAlign = "center";
-    cx.fillText("No entry: " + z.name.replace(/^the /, ""), a, b);
+    // The stripes are busy and the map underneath is busier. Without a
+    // plate behind it the one label that says why the robot refuses is
+    // the least readable thing on screen.
+    const tw = cx.measureText(label).width;
+    cx.fillStyle = "rgba(23,26,30,.86)";
+    cx.fillRect(a - tw / 2 - 7, b - 11, tw + 14, 19);
+    cx.fillStyle = "#f08a80";
+    cx.textBaseline = "middle";
+    cx.fillText(label, a, b - 1);
+    cx.textBaseline = "alphabetic";
   });
 
   // planned route

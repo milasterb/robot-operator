@@ -9,7 +9,7 @@ to call. But the model never decides whether the robot may move — that answer
 comes from a few hundred lines of ordinary Python with no model in them, and
 nothing moves until a person says yes.
 
-**Demo video:** _TODO_
+**Demo video:** https://youtu.be/OiNN0rRtVUc
 **Devpost:** _TODO_
 
 ---
