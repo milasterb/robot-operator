@@ -23,6 +23,7 @@ async def lifespan(app: FastAPI):
     await agent.start()
     print(f"Connected to {agent.mcp.server_info.get('name')} "
           f"with {len(agent.tools)} tools")
+    print(f"Language model: {agent.llm.label}")
     yield
     await mcp.aclose()
 
@@ -35,6 +36,12 @@ async def scene():
     """Map data for the panel: robot, places, zones, current path."""
     raw = await mcp.call_tool("get_scene", {})
     return json.loads(raw)
+
+
+@app.get("/api/llm")
+async def llm() -> dict:
+    """Which model is answering, for the panel's status strip."""
+    return {"label": agent.llm.label}
 
 
 @app.websocket("/ws")

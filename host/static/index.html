@@ -247,6 +247,7 @@ h2 {
   <div class="status-strip">
     <div class="stat"><span class="led" id="led-mcp"></span>MCP server</div>
     <div class="stat"><span class="led" id="led-robot"></span>Robot link</div>
+    <div class="proto" id="llm" title="Language model (LLM_BACKEND)">model —</div>
     <div class="proto">MCP 2025-11-25</div>
   </div>
 </header>
@@ -478,6 +479,10 @@ function draw() {
   cx.lineTo(a + Math.cos(-r.yaw) * (rad + 13), b + Math.sin(-r.yaw) * (rad + 13));
   cx.strokeStyle = cx.fillStyle; cx.lineWidth = 3; cx.stroke();
 }
+
+fetch("/api/llm").then(r => r.json())
+  .then(m => { $("llm").textContent = m.label; })
+  .catch(() => {});
 
 async function refresh() {
   try {

@@ -69,7 +69,7 @@ every outstanding token.
 ## How the pieces fit
 
 ```
-  speech  ──▶  browser host  ──▶  Bedrock (Claude Haiku 4.5)
+  speech  ──▶  browser host  ──▶  language model (Claude or a local one)
                     │                      │
                     │                 tool calls
                     ▼                      ▼
@@ -94,7 +94,7 @@ every outstanding token.
 | Gate | The safety rules. Pure, deterministic, no I/O. | `gate/` |
 | Adapter | Everything the tools need from a robot, behind one `Protocol`. | `robot/` |
 | MCP server | Eight tools over Streamable HTTP, protocol `2025-11-25`. | `server.py` |
-| Host | An MCP client, a Bedrock agent loop, and the operator panel. | `host/` |
+| Host | An MCP client, an agent loop with a switchable model, and the operator panel. | `host/` |
 
 The gate never sees the adapter and the adapter never sees the gate. They meet
 only through two frozen dataclasses, `RobotState` and `MoveProposal`. That is
@@ -201,7 +201,9 @@ does not expose the LEDs on a topic. The change is in
 
 ## Running it
 
-Requires Python 3.10+ and an AWS account with Bedrock access.
+Requires Python 3.10+ and one language model: either an Anthropic API key
+(Claude, needs internet) or [Ollama](https://ollama.com) running locally
+(no internet, no account).
 
 ```bash
 git clone https://github.com/milasterb/robot-operator && cd robot-operator
@@ -226,17 +228,38 @@ Open <http://localhost:8080> in Chrome. Hold the button and speak, or type.
 Speech uses the Web Speech API, which is Chrome-only; the text box works
 everywhere.
 
-Bedrock configuration lives at the top of `host/agent.py`:
+### Choosing the model
 
-```python
-MODEL_ID    = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
-AWS_PROFILE = "alexa-ai-user"
-AWS_REGION  = "us-west-2"
+The model is picked by environment variables, read from the shell or from a
+`.env` file in the repository root. Start from the example:
+
+```bash
+cp .env.example .env        # then edit it
 ```
 
-`temperature` is 0.0. Not because it makes the robot safe — it does not, which
-is the whole argument above — but because a demo that behaves the same twice
-is easier to trust.
+```bash
+LLM_BACKEND=anthropic       # or: ollama
+ANTHROPIC_API_KEY=sk-ant-…  # only for anthropic
+ANTHROPIC_MODEL=claude-haiku-5-5
+OLLAMA_MODEL=qwen3:8b       # only for ollama: `ollama pull qwen3:8b` first
+```
+
+A variable set in the shell wins over `.env`, so one run can use the other
+model without editing anything:
+
+```bash
+LLM_BACKEND=ollama uvicorn host.server:app --port 8080
+```
+
+The panel shows which model is answering in its top bar, and
+`python check_llm.py` asks the configured model one question with no robot
+attached — the quickest way to see that a key or a pulled model works.
+
+Both backends live in `host/llm.py` behind the same three methods; the agent
+loop in `host/agent.py` does not know which one it is talking to, and the gate
+does not know there is a model at all. With Ollama the temperature is 0.0 —
+not because it makes the robot safe (it does not, which is the whole argument
+above) but because a demo that behaves the same twice is easier to trust.
 
 ### Against the real robot
 
@@ -314,7 +337,7 @@ Worth saying plainly, since the point of the project is not overclaiming.
 ```
 gate/          the rules, the verdict types, the gate itself
 robot/         adapter Protocol, FakeRobot, RosRobot, tokens, light bar
-host/          MCP client, Bedrock agent, FastAPI server, operator panel
+host/          MCP client, agent loop, model backends, FastAPI server, operator panel
 patches/       the change to Yahboom's driver node
 tests/         gate tests
 server.py      the MCP server and its eight tools
