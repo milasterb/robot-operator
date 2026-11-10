@@ -1,0 +1,78 @@
+nmcli -f NAME,AUTOCONNECT,AUTOCONNECT-PRIORITY connection show
+nmcli device status
+hostname -I                               
+ip link show wlan0                        
+
+sudo nmcli connection up skola            
+sudo nmcli connection up GL-MT3600BE-499  
+sudo nmcli connection up ROSMASTER  
+
+sudo nmcli connection add type wifi ifname wlan0 con-name JMENO \
+  ssid "NAZEV_SITE" \
+  wifi-sec.key-mgmt wpa-psk wifi-sec.psk "HESLO" \
+  connection.autoconnect yes connection.autoconnect-priority 50
+sudo nmcli connection modify skola wifi-sec.psk "NOVE_HESLO"
+sudo nmcli connection delete JMENO
+
+ping yahboom.local
+
+
+ssh pi@IP_ROBOTA
+docker exec -it rosmaster bash
+
+
+ls $(ros2 pkg prefix yahboomcar_nav)/share/yahboomcar_nav/launch/
+
+
+ros2 launch yahboomcar_nav laser_bringup_launch.py
+
+ros2 launch yahboomcar_bringup yahboomcar_bringup_X3_launch.py
+
+
+ros2 run teleop_twist_keyboard teleop_twist_keyboard
+ros2 run yahboomcar_ctrl yahboom_keyboard
+
+
+ros2 launch yahboomcar_nav map_gmapping_launch.py
+
+
+
+mkdir -p /root/maps
+ros2 run nav2_map_server map_saver_cli -f /root/maps/skola
+
+
+docker cp rosmaster:/root/maps ~/maps_backup
+
+
+ros2 launch yahboomcar_nav navigation_dwa_launch.py --show-args   # jak se předává mapa
+ros2 launch yahboomcar_nav navigation_dwa_launch.py map:=/root/maps/skola.yaml
+
+
+ros2 launch rosbridge_server rosbridge_websocket_launch.xml
+python3 /root/plan_relay.py
+
+
+ros2 topic list
+ros2 topic hz /scan                       # lidar posílá data?
+ros2 topic echo /amcl_pose --once         # kde si robot myslí, že je
+ros2 node list
+
+
+cd ~/projects/robot-operator && source .venv/bin/activate
+ROBOT_HOST=IP_ROBOTA python server.py     # terminál 1 (bez ROBOT_HOST = simulace)
+uvicorn host.server:app --port 8080       # terminál 2 → http://localhost:8080
+
+
+LLM_BACKEND=ollama uvicorn host.server:app --port 8080   # jednorázově
+python check_llm.py                       # test modelu bez robota
+ollama pull qwen3:8b                      # stažení modelu (jednou)
+ollama list                               # stažené modely
+
+
+
+
+
+
+
+
+

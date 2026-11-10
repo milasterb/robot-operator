@@ -1,38 +1,26 @@
 from __future__ import annotations
 
+import base64
+import binascii
+import dataclasses
 import json
 import os
 import time
 
 from mcp.server.mcpserver import MCPServer
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
 from gate.gate import Gate
-from gate.rules import GateConfig, Zone
+from gate.rules import GateConfig
 from gate.types import Level, Point
+from layout import (
+    Site, SiteError, create_site, list_sites, load_site, log_change,
+    parse_site, save_site, site_folder,
+)
 from robot.adapter import FakeRobot
 from robot.lights import Level as LightLevel
 from robot.tokens import TokenError, TokenStore
-
-# The corner of the living room with the treadmill and the desk somebody
-# works at. Two independent reasons to keep the robot out, and only one of
-# them is visible to the robot: the treadmill leaves no clear way through,
-# and a person sits there. The map cannot see the person. That is exactly
-# the kind of thing an operator knows and a model cannot, which is why it
-# belongs in the gate and not in a prompt.
-#
-# Coordinates are in the frame of maps/obyvak_final.yaml. The box is wide
-# enough that a goal inside it is reachable: Nav2 will happily plan a route
-# there, and the gate refuses it anyway. A zone the planner cannot reach
-# would produce the wrong refusal for the right reason.
-TREADMILL = Zone(
-    "the treadmill area",
-    [
-        Point(1.00, -1.50),
-        Point(2.30, -1.50),
-        Point(2.30, -0.35),
-        Point(1.00, -0.35),
-    ],
-)
 
 # Set ROBOT_HOST to the robot's address to drive the real thing:
 #     ROBOT_HOST=192.168.1.42 python server.py
@@ -51,15 +39,77 @@ else:
 # robot_width is the one number here that is not measured from the map.
 # Measure the X3 across its widest point, wheels included, before trusting
 # the clearance rules: they are both derived from it.
-gate = Gate(GateConfig(robot_width=0.20, zones=[TREADMILL]))
+gate = Gate(GateConfig(robot_width=0.20))
 tokens = TokenStore()
+
+
+class SiteKeeper:
+    """The room the robot is in: its map, named places and forbidden zones.
+
+    Everything comes from sites/<SITE>/ — see layout/site.py. Nothing about
+    a particular room is written in this file any more.
+
+    The zones go straight into the gate. Only the operator changes them, by
+    editing site.json or drawing in the panel; no MCP tool can, because the
+    model must never be able to move the fences it is kept inside.
+    """
+
+    def __init__(self, folder) -> None:
+        self.folder = folder
+        self.site: Site = load_site(folder)
+        self._mtime = self._stamp()
+        self.revision = 1
+        self._apply(self.site)
+
+    def current(self) -> Site:
+        """The site as it is on disk now. A hand edit is picked up here."""
+        stamp = self._stamp()
+        if stamp != self._mtime:
+            self._mtime = stamp
+            try:
+                self.replace(load_site(self.folder))
+            except SiteError as e:
+                # Keep the last good fences rather than none at all.
+                print(f"site.json changed but was not loaded: {e}")
+        return self.site
+
+    def switch(self, folder) -> None:
+        """Make another site the current one."""
+        site = load_site(folder)
+        self.folder = folder
+        self._mtime = self._stamp()
+        self.replace(site)
+
+    def replace(self, site: Site) -> None:
+        self.site = site
+        self.revision += 1
+        self._apply(site)
+        # A trip proposed against the old map may now be somewhere else or
+        # behind a new fence. Make the person ask again.
+        tokens.discard_all()
+
+    def _apply(self, site: Site) -> None:
+        gate.config = dataclasses.replace(gate.config, zones=list(site.zones))
+        if isinstance(robot, FakeRobot):
+            robot.places = dict(site.places)
+
+    def _stamp(self) -> float:
+        try:
+            return (self.folder / "site.json").stat().st_mtime
+        except FileNotFoundError:
+            return 0.0
+
+
+# Which room: SITE in the shell or in .env. Without it the in-memory robot
+# gets the demo flat and the real one gets the living room it was mapped in.
+sites = SiteKeeper(site_folder(os.environ.get("SITE") or ("obyvak" if ROBOT_HOST else "demo")))
 
 mcp = MCPServer("robot-operator", version="0.4.0")
 
 
 def _resolve(place: str) -> tuple[str, Point]:
     """Match a spoken place name against the map. Raises ValueError."""
-    places = robot.places()
+    places = sites.current().places
     needle = place.strip().lower()
     for name, point in places.items():
         if needle in name.lower() or name.lower() in needle:
@@ -85,7 +135,7 @@ def get_status() -> str:
 @mcp.tool()
 def list_places() -> str:
     """List the places the robot can be sent to."""
-    return "I can drive to: " + ", ".join(robot.places()) + "."
+    return "I can drive to: " + ", ".join(sites.current().places) + "."
 
 
 @mcp.tool()
@@ -190,15 +240,17 @@ def get_scene() -> str:
 
     For screens, not for speech. Do not read this out loud.
     """
+    site = sites.current()
     s = robot.get_state()
     scene = {
+        "site": {"name": site.name, "revision": sites.revision},
         "robot": {
             "x": s.pose.x, "y": s.pose.y, "yaw": s.pose.yaw,
             "moving": s.moving, "voltage": round(s.voltage, 1),
             "localized": s.localized,
         },
         "places": [
-            {"name": n, "x": p.x, "y": p.y} for n, p in robot.places().items()
+            {"name": n, "x": p.x, "y": p.y} for n, p in site.places.items()
         ],
         "zones": [
             {
@@ -212,6 +264,113 @@ def get_scene() -> str:
         ],
     }
     return json.dumps(scene)
+
+
+# ---- operator routes ------------------------------------------------------
+# Plain HTTP next to the MCP endpoint, for the panel. They are not MCP tools,
+# so the model cannot see or call them.
+
+@mcp.custom_route("/operator/site", methods=["GET"])
+async def operator_site(request: Request) -> JSONResponse:
+    site = sites.current()
+    body = site.to_json()
+    body["revision"] = sites.revision
+    body["map_info"] = site.describe_map()
+    return JSONResponse(body)
+
+
+@mcp.custom_route("/operator/site", methods=["PUT"])
+async def operator_save(request: Request) -> JSONResponse:
+    """Save places and zones drawn in the panel.
+
+    The request carries the revision it was drawn on. If the site changed
+    in the meantime — someone edited the file, or another tab saved first —
+    the save is refused rather than silently undoing that change.
+    """
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        return _error("The request was not JSON.")
+    if not isinstance(body, dict):
+        return _error("The request must be a JSON object.")
+    current = sites.current()
+    if body.get("revision") != sites.revision:
+        return _error("The map changed while you were editing. Reload it and "
+                      "draw your change again.", status=409)
+    data = current.to_json()
+    data["places"] = body.get("places", [])
+    data["zones"] = body.get("zones", [])
+    try:
+        site = parse_site(data, current.folder, current.grid)
+    except SiteError as e:
+        return _error(str(e))
+    before = current.to_json()
+    save_site(site)
+    log_change(current.folder, before, site.to_json())
+    sites._mtime = sites._stamp()      # our own write, not a hand edit
+    sites.replace(site)
+    print(f"Site {site.name!r} saved: {len(site.places)} places, "
+          f"{len(site.zones)} zones")
+    return await operator_site(request)
+
+
+@mcp.custom_route("/operator/sites", methods=["GET"])
+async def operator_sites(request: Request) -> JSONResponse:
+    return JSONResponse({
+        "sites": list_sites(),
+        "active": sites.folder.name,
+        # The robot's own map lives on the robot, and the fences only mean
+        # something in that map's frame. With a real robot connected the
+        # site is chosen at startup (SITE=...), not switched from a browser.
+        "switchable": not ROBOT_HOST,
+    })
+
+
+@mcp.custom_route("/operator/sites", methods=["POST"])
+async def operator_new_site(request: Request) -> JSONResponse:
+    """Create a site from a map saved by map_saver, and switch to it."""
+    if ROBOT_HOST:
+        return _error("With a real robot connected, start the server with "
+                      "SITE=... instead of switching maps here.", status=403)
+    try:
+        body = await request.json()
+        pgm = base64.b64decode(body["pgm_base64"], validate=True)
+        target = create_site(str(body["name"]), str(body["yaml"]), pgm)
+    except (json.JSONDecodeError, KeyError, TypeError, binascii.Error):
+        return _error("Send the map's name, its .yaml text and its .pgm file.")
+    except SiteError as e:
+        return _error(str(e))
+    sites.switch(target)
+    print(f"New site {sites.site.name!r} created in {target}")
+    return await operator_site(request)
+
+
+@mcp.custom_route("/operator/active", methods=["POST"])
+async def operator_switch(request: Request) -> JSONResponse:
+    if ROBOT_HOST:
+        return _error("With a real robot connected, start the server with "
+                      "SITE=... instead of switching maps here.", status=403)
+    try:
+        folder = site_folder(str((await request.json())["folder"]))
+        sites.switch(folder)
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return _error("Say which site to switch to.")
+    except SiteError as e:
+        return _error(str(e))
+    return await operator_site(request)
+
+
+def _error(message: str, status: int = 400) -> JSONResponse:
+    return JSONResponse({"error": message}, status_code=status)
+
+
+@mcp.custom_route("/operator/map.png", methods=["GET"])
+async def operator_map(request: Request) -> Response:
+    site = sites.current()
+    if site.grid is None:
+        return Response(status_code=404)
+    return Response(site.map_png(), media_type="image/png",
+                    headers={"Cache-Control": "no-store"})
 
 
 if __name__ == "__main__":

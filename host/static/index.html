@@ -159,6 +159,35 @@ h2 {
 
 .map-wrap { flex: 1; position: relative; min-height: 0; background: var(--sunk); }
 #map { width: 100%; height: 100%; display: block; }
+.maphead { display: flex; align-items: center; gap: 8px; }
+.sitename { color: var(--faint); font-weight: 400; }
+.sitename:not(:empty)::before { content: "· "; }
+.maphead .spacer { flex: 1; }
+.mini {
+  font: 500 11px var(--sans); color: var(--dim);
+  background: transparent; border: 1px solid var(--line); border-radius: 4px;
+  padding: 3px 8px; cursor: pointer;
+}
+.mini:hover { color: var(--text); border-color: var(--line-sf); }
+.mini:focus-visible { outline: 2px solid var(--limit); outline-offset: 1px; }
+.mini.on { color: var(--sunk); background: var(--text); border-color: var(--text); }
+.mini.primary { color: var(--sunk); background: var(--allow); border-color: var(--allow); }
+select.mini { padding: 2px 4px; max-width: 160px; }
+select.mini option { background: var(--panel); color: var(--text); }
+.hidden { display: none !important; }
+
+#editbar {
+  position: absolute; left: 12px; top: 12px; right: 12px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 7px; background: rgba(23,26,30,.92);
+  border: 1px solid var(--line); border-radius: 6px;
+}
+#editbar .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 2px; }
+#edithelp { flex-basis: 100%; font: 400 11px var(--sans); color: var(--dim); padding: 2px 2px 0; }
+#edithelp.err { color: #f08a80; }
+.map-wrap.editing #map { cursor: grab; }
+.map-wrap.editing.tool-place #map, .map-wrap.editing.tool-zone #map { cursor: crosshair; }
+.map-wrap.editing.tool-delete #map { cursor: not-allowed; }
 #maphint {
   position: absolute; left: 14px; bottom: 12px;
   font: 400 11px var(--mono); color: var(--faint);
@@ -272,10 +301,27 @@ h2 {
   </div>
 
   <div class="col">
-    <h2>Map</h2>
-    <div class="map-wrap">
+    <h2 class="maphead">
+      <span>Map <span id="sitename" class="sitename"></span></span>
+      <span class="spacer"></span>
+      <select id="sitepick" class="mini hidden" title="Switch site"></select>
+      <button id="newmap" class="mini hidden" title="Load a map saved by map_saver (.yaml + .pgm)">New map…</button>
+      <input id="mapfiles" type="file" accept=".yaml,.yml,.pgm" multiple class="hidden">
+      <button id="editbtn" class="mini">Edit map</button>
+    </h2>
+    <div class="map-wrap" id="mapwrap">
       <canvas id="map"></canvas>
-      <div id="maphint">1 m grid &nbsp;·&nbsp; occupancy map, 0.05 m/px</div>
+      <div id="maphint">1 m grid</div>
+      <div id="editbar" class="hidden">
+        <button class="mini tool on" data-tool="move" title="Drag places and zone corners">Move</button>
+        <button class="mini tool" data-tool="place" title="Click to add a named place">Place</button>
+        <button class="mini tool" data-tool="zone" title="Click corners; click the first corner or press Enter to close">Zone</button>
+        <button class="mini tool" data-tool="delete" title="Click a place or zone to remove it">Delete</button>
+        <span class="sep"></span>
+        <button class="mini primary" id="editsave">Save</button>
+        <button class="mini" id="editcancel">Cancel</button>
+        <div id="edithelp"></div>
+      </div>
     </div>
     <div id="telemetry">
       <div><div class="k">Battery</div><div class="v" id="volt">—</div></div>
@@ -310,26 +356,38 @@ const cv = $("map"), cx = cv.getContext("2d");
 let T = { s: 60, ox: 0, oy: 0 };
 const ROBOT_R = 0.10;           // metres, matches the Nav2 footprint
 
-/* The occupancy grid the robot actually navigates on, straight from
-   maps/obyvak_final.yaml. Walls and floor are drawn as a backdrop so the
-   named places and the forbidden zone sit in the real room rather than in
-   an empty coordinate system. */
-const MAP = {
-  res: 0.05,            // metres per pixel
-  origin: [-10, -10],   // world position of the image's bottom-left corner
-  size: [384, 384],     // pixels
-  // Bounding box of the cells that were actually surveyed. The grid is
-  // 19.2 m square and nearly all of it is unknown, so fitting the view to
-  // the whole image would shrink the flat to a smudge in the middle.
-  extent: { x0: -2.75, x1: 5.85, y0: -1.75, y1: 1.85 },
-};
-MAP.x1 = MAP.origin[0] + MAP.size[0] * MAP.res;
-MAP.y1 = MAP.origin[1] + MAP.size[1] * MAP.res;
-
+/* The occupancy grid of the current site, from its map.yaml and map.pgm on
+   the server. Walls and floor are drawn as a backdrop so the named places
+   and the forbidden zones sit in the real room rather than in an empty
+   coordinate system. A site without a map (the simulated demo flat) gets
+   the metre grid alone. */
+let MAP = null;                 // { res, origin, size, extent, x1, y1 }
+let siteRevision = null;
+let siteData = null;            // the site as the server last sent it
 const mapImg = new Image();
 let mapReady = false;
-mapImg.onload = () => { mapReady = true; draw(); };
-mapImg.src = "/static/map_bg.png";
+mapImg.onload = () => { mapReady = true; fit(); draw(); };
+
+async function loadSite() {
+  const site = await (await fetch("/api/operator/site")).json();
+  siteData = site;
+  siteRevision = site.revision;
+  loadSiteList();
+  $("sitename").textContent = site.name;
+  const m = site.map_info;
+  mapReady = false;
+  if (!m) {
+    MAP = null;
+    $("maphint").innerHTML = "1 m grid &nbsp;·&nbsp; no map for this site";
+    return;
+  }
+  MAP = { res: m.resolution, origin: m.origin, size: m.size, extent: m.extent };
+  MAP.x1 = MAP.origin[0] + MAP.size[0] * MAP.res;
+  MAP.y1 = MAP.origin[1] + MAP.size[1] * MAP.res;
+  $("maphint").innerHTML = "1 m grid &nbsp;·&nbsp; occupancy map, "
+    + MAP.res.toFixed(2) + " m/px";
+  mapImg.src = "/api/operator/map.png?r=" + site.revision;
+}
 
 let hazard = null;              // diagonal warning stripes, built once
 function hazardPattern() {
@@ -356,8 +414,8 @@ function fit() {
   (scene.zones || []).forEach(z => pts.push(...z.polygon));
   // Keep the whole surveyed area in frame. Without this the view fits the
   // places alone and crops the room they stand in, which reads as a bug.
-  const e = MAP.extent;
-  pts.push({ x: e.x0, y: e.y0 }, { x: e.x1, y: e.y1 });
+  const e = MAP && MAP.extent;
+  if (e) pts.push({ x: e.x0, y: e.y0 }, { x: e.x1, y: e.y1 });
   const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
   const pad = 1.0;
   const spanX = Math.max(...xs) - Math.min(...xs) + pad * 2;
@@ -374,7 +432,7 @@ function draw() {
   if (!scene) return;
 
   // the surveyed map, underneath everything else
-  if (mapReady) {
+  if (MAP && mapReady) {
     const [left, top] = px({ x: MAP.origin[0], y: MAP.y1 });
     const [right, bottom] = px({ x: MAP.x1, y: MAP.origin[1] });
     // Each cell is 5 cm and the view magnifies them well past 1:1.
@@ -400,7 +458,7 @@ function draw() {
   }
 
   // forbidden zones, drawn as hazard markings
-  (scene.zones || []).forEach(z => {
+  shownZones().forEach(z => {
     cx.beginPath();
     z.polygon.forEach((p, i) => {
       const [a, b] = px(p);
@@ -442,8 +500,8 @@ function draw() {
   }
 
   // named places, except those a forbidden zone already labels
-  scene.places.forEach(p => {
-    const shadowed = (scene.zones || []).some(
+  shownPlaces().forEach(p => {
+    const shadowed = !editing && shownZones().some(
       z => z.name.toLowerCase() === p.name.toLowerCase()
     );
     if (shadowed) return;
@@ -456,8 +514,10 @@ function draw() {
     cx.fillText(p.name.replace(/^the /, ""), a, b - 11);
   });
 
+  if (editing) drawEditOverlay();
+
   // where the gate last refused
-  if (lastStop) {
+  if (lastStop && !editing) {
     const [a, b] = px(lastStop);
     cx.strokeStyle = "#e2483d"; cx.lineWidth = 2;
     cx.beginPath(); cx.arc(a, b, 15, 0, 7); cx.stroke();
@@ -480,6 +540,249 @@ function draw() {
   cx.strokeStyle = cx.fillStyle; cx.lineWidth = 3; cx.stroke();
 }
 
+
+/* ---------- map editor ----------
+   Places and forbidden zones are drawn here and saved to the site's
+   site.json on the server, which checks them before the gate uses them.
+   This is the operator's tool: nothing here is reachable by the model. */
+let editing = false, tool = "move", draft = null;
+let pending = [];               // corners of the zone being drawn
+let hover = null;               // cursor in world coordinates
+let dragging = null;            // { kind: "place", i } or { kind: "corner", z, k }
+
+const HIT = 10;                 // pixels: how close a click must be to grab something
+
+function shownPlaces() { return editing ? draft.places : (scene ? scene.places : []); }
+function shownZones()  { return editing ? draft.zones  : (scene ? scene.zones || [] : []); }
+
+const world = (mx, my) => ({ x: (mx - T.ox) / T.s, y: (T.oy - my) / T.s });
+const near = (p, mx, my) => { const [a, b] = px(p); return Math.hypot(a - mx, b - my) <= HIT; };
+
+function inside(p, poly) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) c = !c;
+  }
+  return c;
+}
+
+function help(text, err) {
+  const h = $("edithelp");
+  h.textContent = text;
+  h.className = err ? "err" : "";
+}
+
+const HELP = {
+  move: "Drag a place or a zone corner to move it. Scroll to zoom.",
+  place: "Click where the robot should be able to go, then name the place.",
+  zone: "Click the corners of a forbidden area. Click the first corner again or press Enter to close it; Esc to undo.",
+  delete: "Click a place or inside a zone to remove it.",
+};
+
+function setTool(t) {
+  tool = t; pending = [];
+  document.querySelectorAll("#editbar .tool").forEach(b => b.classList.toggle("on", b.dataset.tool === t));
+  $("mapwrap").className = "map-wrap editing tool-" + t;
+  help(HELP[t]);
+  draw();
+}
+
+function startEditing() {
+  if (!siteData) return;
+  editing = true;
+  draft = {
+    places: siteData.places.map(p => ({ name: p.name, x: p.x, y: p.y })),
+    zones: siteData.zones.map(z => ({ name: z.name, polygon: z.polygon.map(([x, y]) => ({ x, y })) })),
+  };
+  $("editbar").classList.remove("hidden");
+  $("editbtn").classList.add("hidden");
+  setTool("move");
+}
+
+function stopEditing() {
+  editing = false; draft = null; pending = []; dragging = null;
+  $("editbar").classList.add("hidden");
+  $("editbtn").classList.remove("hidden");
+  $("mapwrap").className = "map-wrap";
+  fit(); draw();
+}
+
+function askName(what, suggestion) {
+  const taken = new Set([...draft.places, ...draft.zones].map(i => i.name.toLowerCase()));
+  for (;;) {
+    const name = (prompt("Name of the " + what + ":", suggestion || "") || "").trim();
+    if (!name) return null;
+    const list = what === "place" ? draft.places : draft.zones;
+    if (list.some(i => i.name.toLowerCase() === name.toLowerCase())) {
+      alert("There is already a " + what + " called “" + name + "”.");
+      continue;
+    }
+    return name;
+  }
+}
+
+function closeZone() {
+  if (pending.length < 3) { help("A zone needs at least three corners.", true); return; }
+  const name = askName("zone", "the ");
+  if (name) draft.zones.push({ name, polygon: pending.slice() });
+  pending = [];
+  help(HELP.zone);
+  draw();
+}
+
+cv.addEventListener("mousedown", e => {
+  if (!editing) return;
+  const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+  const w = world(mx, my);
+
+  if (tool === "move") {
+    for (let z = 0; z < draft.zones.length; z++)
+      for (let k = 0; k < draft.zones[z].polygon.length; k++)
+        if (near(draft.zones[z].polygon[k], mx, my)) { dragging = { kind: "corner", z, k }; return; }
+    const i = draft.places.findIndex(p => near(p, mx, my));
+    if (i >= 0) dragging = { kind: "place", i };
+  } else if (tool === "place") {
+    const name = askName("place", "the ");
+    if (name) draft.places.push({ name, x: w.x, y: w.y });
+    draw();
+  } else if (tool === "zone") {
+    if (pending.length >= 3 && near(pending[0], mx, my)) closeZone();
+    else { pending.push(w); draw(); }
+  } else if (tool === "delete") {
+    const i = draft.places.findIndex(p => near(p, mx, my));
+    if (i >= 0) { draft.places.splice(i, 1); draw(); return; }
+    const z = draft.zones.findIndex(z => inside(w, z.polygon));
+    if (z >= 0) { draft.zones.splice(z, 1); draw(); }
+  }
+});
+
+addEventListener("mousemove", e => {
+  if (!editing) return;
+  const r = cv.getBoundingClientRect();
+  hover = world(e.clientX - r.left, e.clientY - r.top);
+  if (dragging) {
+    const target = dragging.kind === "place"
+      ? draft.places[dragging.i]
+      : draft.zones[dragging.z].polygon[dragging.k];
+    target.x = hover.x; target.y = hover.y;
+  }
+  if (dragging || (tool === "zone" && pending.length)) draw();
+});
+addEventListener("mouseup", () => { dragging = null; });
+
+// Zoom around the cursor while editing: corners of a zone want centimetres,
+// and the fitted view shows the whole room.
+cv.addEventListener("wheel", e => {
+  if (!editing) return;
+  e.preventDefault();
+  const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+  const before = world(mx, my);
+  T.s = Math.min(800, Math.max(10, T.s * Math.exp(-e.deltaY * 0.0015)));
+  T.ox = mx - before.x * T.s;
+  T.oy = my + before.y * T.s;
+  draw();
+}, { passive: false });
+
+addEventListener("keydown", e => {
+  if (!editing || tool !== "zone" || e.target.tagName === "INPUT") return;
+  if (e.key === "Enter") { e.preventDefault(); closeZone(); }
+  if (e.key === "Escape") { pending.pop(); draw(); }
+});
+
+function drawEditOverlay() {
+  // every corner of every zone gets a handle
+  cx.fillStyle = "#e8ebee";
+  draft.zones.forEach(z => z.polygon.forEach(p => {
+    const [a, b] = px(p);
+    cx.fillRect(a - 3.5, b - 3.5, 7, 7);
+  }));
+  // the zone being drawn, with a rubber band to the cursor
+  if (pending.length) {
+    cx.beginPath();
+    pending.forEach((p, i) => { const [a, b] = px(p); i ? cx.lineTo(a, b) : cx.moveTo(a, b); });
+    if (hover) { const [a, b] = px(hover); cx.lineTo(a, b); }
+    cx.strokeStyle = "#f08a80"; cx.lineWidth = 1.5;
+    cx.setLineDash([5, 4]); cx.stroke(); cx.setLineDash([]);
+    pending.forEach((p, i) => {
+      const [a, b] = px(p);
+      cx.beginPath(); cx.arc(a, b, i ? 3.5 : 6, 0, 7);
+      cx.fillStyle = i ? "#f08a80" : "rgba(240,138,128,.35)"; cx.fill();
+    });
+  }
+}
+
+async function saveEdits() {
+  const body = {
+    revision: siteRevision,
+    places: draft.places.map(p => ({ name: p.name, x: +p.x.toFixed(3), y: +p.y.toFixed(3) })),
+    zones: draft.zones.map(z => ({
+      name: z.name, kind: "forbidden",
+      polygon: z.polygon.map(p => [+p.x.toFixed(3), +p.y.toFixed(3)]),
+    })),
+  };
+  help("Saving…");
+  const res = await fetch("/api/operator/site", {
+    method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+  const out = await res.json().catch(() => ({ error: "The server did not answer." }));
+  if (!res.ok) { help(out.error || "Saving failed.", true); return; }
+  stopEditing();
+  await loadSite();
+  refresh();
+}
+
+document.querySelectorAll("#editbar .tool").forEach(b => b.onclick = () => setTool(b.dataset.tool));
+$("editbtn").onclick = startEditing;
+$("editcancel").onclick = stopEditing;
+$("editsave").onclick = saveEdits;
+
+/* ---------- sites: switch, or start a new one from a saved map ---------- */
+async function loadSiteList() {
+  const res = await fetch("/api/operator/sites").catch(() => null);
+  if (!res || !res.ok) return;
+  const { sites, active, switchable } = await res.json();
+  const pick = $("sitepick");
+  pick.innerHTML = "";
+  sites.forEach(s => {
+    const o = document.createElement("option");
+    o.value = s.folder; o.textContent = s.name; o.selected = s.folder === active;
+    pick.appendChild(o);
+  });
+  pick.classList.toggle("hidden", !switchable || sites.length < 2);
+  $("newmap").classList.toggle("hidden", !switchable);
+}
+
+$("sitepick").onchange = async e => {
+  const res = await fetch("/api/operator/active", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ folder: e.target.value }),
+  });
+  if (!res.ok) alert((await res.json()).error || "Could not switch.");
+  await loadSite(); refresh();
+};
+
+$("newmap").onclick = () => $("mapfiles").click();
+$("mapfiles").onchange = async e => {
+  const files = [...e.target.files];
+  e.target.value = "";
+  const yaml = files.find(f => /\.ya?ml$/i.test(f.name));
+  const pgm = files.find(f => /\.pgm$/i.test(f.name));
+  if (!yaml || !pgm) { alert("Select both files map_saver wrote: the .yaml and the .pgm."); return; }
+  const name = (prompt("Name of the new site:", yaml.name.replace(/\.ya?ml$/i, "")) || "").trim();
+  if (!name) return;
+  const bytes = new Uint8Array(await pgm.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  const res = await fetch("/api/operator/sites", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name, yaml: await yaml.text(), pgm_base64: btoa(bin) }),
+  });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) { alert(out.error || "The map could not be loaded."); return; }
+  await loadSite(); refresh();
+};
+
 fetch("/api/llm").then(r => r.json())
   .then(m => { $("llm").textContent = m.label; })
   .catch(() => {});
@@ -489,6 +792,8 @@ async function refresh() {
     const res = await fetch("/api/scene");
     scene = await res.json();
     $("led-robot").className = "led on";
+    // The operator changed the map or its fences: fetch the new site.
+    if (scene.site && scene.site.revision !== siteRevision && !editing) await loadSite();
 
     const v = scene.robot.voltage;
     const volt = $("volt");
@@ -499,7 +804,8 @@ async function refresh() {
     $("state").textContent = !scene.robot.localized ? "lost"
       : scene.robot.moving ? "driving" : "stopped";
 
-    fit(); draw();
+    if (!editing) fit();
+    draw();
   } catch (e) {
     $("led-robot").className = "led off";
   }

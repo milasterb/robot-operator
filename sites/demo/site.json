@@ -1,0 +1,16 @@
+{
+  "name": "Demo flat (simulated)",
+  "map": null,
+  "places": [
+    {"name": "the charger", "x": 0.0, "y": 0.0},
+    {"name": "the kitchen", "x": 3.0, "y": 0.5},
+    {"name": "the living room", "x": 1.5, "y": 2.5},
+    {"name": "the bathroom", "x": 3.0, "y": -2.0},
+    {"name": "the front door", "x": -1.0, "y": 1.0},
+    {"name": "the bedroom", "x": 4.2, "y": 2.0}
+  ],
+  "zones": [
+    {"name": "the corridor", "kind": "forbidden",
+     "polygon": [[3.7, 1.4], [4.8, 1.4], [4.8, 2.7], [3.7, 2.7]]}
+  ]
+}

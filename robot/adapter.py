@@ -16,10 +16,6 @@ class RobotAdapter(Protocol):
 
     def get_state(self) -> RobotState: ...
 
-    def places(self) -> dict[str, Point]:
-        """Named destinations, e.g. {"the charger": Point(0.0, 0.0)}."""
-        ...
-
     def plan(self, goal: Point, goal_name: str | None) -> MoveProposal:
         """Ask the planner for a route. Does not move the robot."""
         ...
@@ -46,9 +42,12 @@ class FakeRobot:
 
     Used for tests and for developing the tools without hardware.
 
-    The flat below is not a model of any particular flat. It is laid out so
-    that each named place produces a different verdict, because a gate that
-    has only ever been seen saying yes has not been seen working.
+    Its places come from the site (sites/demo/site.json by default) and are
+    set by the server. The doorways below are what the fake planner reports
+    as the narrowest point on the way into each demo place: laid out so that
+    each one produces a different verdict, because a gate that has only ever
+    been seen saying yes has not been seen working. Places on any other site
+    stand in open floor.
     """
 
     def __init__(self) -> None:
@@ -63,16 +62,7 @@ class FakeRobot:
         self.halted_at: float | None = None
         self.light: LightLevel | None = None
 
-        self._places = {
-            "the charger": Point(0.0, 0.0),
-            "the kitchen": Point(3.0, 0.5),
-            "the living room": Point(1.5, 2.5),
-            "the bathroom": Point(3.0, -2.0),
-            "the front door": Point(-1.0, 1.0),
-            # In the corridor, which the gate forbids: in the real flat the
-            # robot loses its localisation in there.
-            "the bedroom": Point(4.2, 2.0),
-        }
+        self.places: dict[str, Point] = {}  # set from the site by the server
         # The narrowest point on the way into a place, in metres: a door
         # frame, or a gap left by furniture. Width belongs to the place and
         # not to a point on the map, because a route into the bathroom goes
@@ -95,9 +85,6 @@ class FakeRobot:
             localized=self.localized,
             timestamp=time.monotonic(),
         )
-
-    def places(self) -> dict[str, Point]:
-        return dict(self._places)
 
     def plan(self, goal: Point, goal_name: str | None) -> MoveProposal:
         start = Point(self.pose.x, self.pose.y)
@@ -144,7 +131,7 @@ class FakeRobot:
 
     def _place_at(self, point: Point) -> str | None:
         """Which named place the robot is standing in, if any."""
-        for name, p in self._places.items():
+        for name, p in self.places.items():
             if _distance(point, p) <= AT_PLACE:
                 return name
         return None

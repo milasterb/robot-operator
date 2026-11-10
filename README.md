@@ -263,17 +263,53 @@ above) but because a demo that behaves the same twice is easier to trust.
 
 ### Against the real robot
 
-On the robot, start rosbridge and Nav2, then point the server at it:
+On the robot, start the laser bring-up, Nav2, rosbridge and the plan relay
+(`onboard/plan_relay.py`, run inside the robot's container), then point the
+server at it:
 
 ```bash
-ROBOT_HOST=192.168.x.x python server.py
+ROBOT_HOST=192.168.x.x SITE=obyvak python server.py
 ```
 
-`RosRobot` reads `/voltage`, `/odom` and `/scan`, plans through
-`/compute_path_to_pose`, drives through the `/navigate_to_pose` action, and
-applies LIMIT by publishing `nav2_msgs/SpeedLimit` to `/speed_limit`. `halt()`
-cancels the goal *and* publishes a zero `/cmd_vel`, so the wheels stop even if
-the action server is slow to notice.
+`RosRobot` reads `/voltage`, `/odom`, `/amcl_pose` and `/scan`. Routes come
+from Nav2's planner through the relay, because rosbridge cannot reach a ROS 2
+action. Goals go out on `/goal_pose`. LIMIT is applied by writing the DWB
+controller's speed parameters, since Nav2 Foxy has no `/speed_limit` topic.
+`halt()` publishes a zero `/cmd_vel`, replaces the goal with the robot's own
+pose, and publishes zero again.
+
+### Your own room: sites
+
+Everything about a room — its map, its named places and its forbidden zones —
+lives in a folder under `sites/`, not in the code:
+
+```
+sites/obyvak/
+  map.yaml, map.pgm   the occupancy grid, exactly as map_saver wrote it
+  site.json           places and zones, in metres in the map frame
+```
+
+`SITE=obyvak` (in the shell or in `.env`) picks one. Without it the in-memory
+robot gets `sites/demo`, the flat below, and the real robot gets `obyvak`.
+
+The panel edits the current site. **Edit map** opens the tools: add a place
+with a click, draw a forbidden zone corner by corner, drag either to move it,
+scroll to zoom. **Save** sends the drawing to the server, which refuses
+anything it cannot make sense of — a zone that crosses itself, two places
+with the same name, a corner off the map — and only then hands the new zones
+to the gate. A trip proposed before the change has to be proposed again.
+Every save is appended to the site's `changes.log`.
+
+**New map…** turns a map from the robot into a new site: select the `.yaml`
+and `.pgm` that `map_saver_cli` wrote, give it a name, and draw its places
+and zones. With the in-memory robot the panel can also switch between sites.
+With a real robot it cannot: the zones only mean something in the frame of
+the map Nav2 is localising against, so the site is chosen when the server
+starts.
+
+None of this is an MCP tool. The model cannot list, change or even see the
+editing routes, because it must never be able to move the fences it is kept
+inside.
 
 ### The in-memory robot
 
@@ -300,8 +336,9 @@ exception for the charger.
 pytest
 ```
 
-Seventeen tests over the gate. The two that matter most are not about any
-individual rule:
+Seventeen tests over the gate and seventeen over sites — what a valid map,
+place and zone is, and that a broken map never becomes a site. The two that
+matter most are not about any individual rule:
 
 - `test_evaluate_changes_nothing` — asking the gate a question must not alter
   it, or the second question gets a different answer.
@@ -338,8 +375,10 @@ Worth saying plainly, since the point of the project is not overclaiming.
 gate/          the rules, the verdict types, the gate itself
 robot/         adapter Protocol, FakeRobot, RosRobot, tokens, light bar
 host/          MCP client, agent loop, model backends, FastAPI server, operator panel
+layout/        sites: loading maps, checking places and zones, the change log
+sites/         one folder per room: map, places, forbidden zones
 patches/       the change to Yahboom's driver node
-tests/         gate tests
+tests/         gate and site tests
 server.py      the MCP server and its eight tools
 FRICTION_LOG.md
 PRODUCT_FEEDBACK.md

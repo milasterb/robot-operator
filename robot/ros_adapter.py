@@ -51,18 +51,6 @@ class RosRobot:
     of holding a goal handle.
     """
 
-    # Named destinations, in the coordinates of maps/obyvak_final.yaml.
-    # Measured from the map, not guessed: each one sits in open floor with
-    # room for the robot to turn around.
-    PLACES: dict[str, Point] = {
-        "my room": Point(-0.35, 0.00),         # 0.70 m clear around it
-        "the living room": Point(2.30, 0.15),  # 0.87 m
-        # Inside the forbidden zone. It is a real, reachable place — Nav2
-        # will plan a route to it — which is the point: the gate refuses it
-        # on its own authority, not because the planner failed.
-        "the treadmill": Point(2.00, -0.42),
-    }
-
     def __init__(self, host: str, port: int = 9090) -> None:
         self.ros = roslibpy.Ros(host=host, port=port)
         self._lock = threading.Lock()
@@ -251,9 +239,6 @@ class RosRobot:
         if self._moving:
             return (time.monotonic() - self._amcl_at) <= AMCL_MAX_AGE_MOVING
         return True
-
-    def places(self) -> dict[str, Point]:
-        return dict(self.PLACES)
 
     @property
     def current_path(self) -> list[Point]:

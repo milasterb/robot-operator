@@ -7,3 +7,6 @@ __pycache__/
 
 # secrets and local settings
 .env
+
+# when each fence was moved, kept per installation
+sites/*/changes.log

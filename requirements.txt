@@ -32,6 +32,7 @@ python-dotenv==1.2.3
 python-multipart==0.0.32
 referencing==0.37.0
 rich==15.0.0
+roslibpy==2.1.0
 rpds-py==2026.6.3
 shellingham==1.5.4
 sse-starlette==3.4.11
