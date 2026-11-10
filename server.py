@@ -15,7 +15,7 @@ from gate.gate import Gate
 from gate.rules import GateConfig
 from gate.types import Level, Point
 from layout import (
-    Site, SiteError, create_site, list_sites, load_site, log_change,
+    Site, SiteError, compare_with_robot, create_site, list_sites, load_site, log_change,
     parse_site, save_site, site_folder,
 )
 from robot.adapter import FakeRobot
@@ -54,11 +54,18 @@ class SiteKeeper:
     model must never be able to move the fences it is kept inside.
     """
 
+    # How long a copy of the robot's own map is trusted before it is fetched
+    # again. Nav2 may have been restarted on another map in the meantime.
+    ROBOT_MAP_TTL = 60.0
+
     def __init__(self, folder) -> None:
         self.folder = folder
         self.site: Site = load_site(folder)
         self._mtime = self._stamp()
         self.revision = 1
+        self._robot_map: dict | None = None
+        self._robot_map_at = -1e9
+        self.map_check = {"status": "unknown", "detail": ""}
         self._apply(self.site)
 
     def current(self) -> Site:
@@ -92,6 +99,45 @@ class SiteKeeper:
         gate.config = dataclasses.replace(gate.config, zones=list(site.zones))
         if isinstance(robot, FakeRobot):
             robot.places = dict(site.places)
+        self.check_map(refetch=True)
+
+    def check_map(self, refetch: bool = False) -> dict:
+        """Is the robot localising against the map these zones were drawn on?
+
+        A mismatch is handed to the gate, which then refuses every trip: the
+        zones would be fencing off the wrong floor. If the robot's map cannot
+        be read at all (Nav2 not up yet, map_server named differently), that
+        is reported but does not block, so a missing service never strands
+        the demo; the panel says the zones are unverified.
+        """
+        if isinstance(robot, FakeRobot):
+            self.map_check = {"status": "simulated",
+                              "detail": "Simulated robot: no robot map to compare."}
+            gate.config = dataclasses.replace(gate.config, map_mismatch=None)
+            return self.map_check
+
+        stale = time.monotonic() - self._robot_map_at > self.ROBOT_MAP_TTL
+        if refetch or stale or self._robot_map is None:
+            fetched = robot.fetch_map()
+            self._robot_map_at = time.monotonic()
+            if fetched is not None or self._robot_map is None or refetch:
+                self._robot_map = fetched
+
+        if self._robot_map is None:
+            self.map_check = {"status": "unverified",
+                              "detail": "Could not read the map from the robot's "
+                                        "map_server, so the zones are not verified."}
+            mismatch = None
+        else:
+            mismatch = compare_with_robot(self.site.grid, self._robot_map)
+            self.map_check = (
+                {"status": "mismatch", "detail": mismatch} if mismatch else
+                {"status": "match", "detail": "The robot is using this map."}
+            )
+        if mismatch != gate.config.map_mismatch:
+            print(f"Map check: {self.map_check['status']} {self.map_check['detail']}")
+        gate.config = dataclasses.replace(gate.config, map_mismatch=mismatch)
+        return self.map_check
 
     def _stamp(self) -> float:
         try:
@@ -150,6 +196,7 @@ def propose_move(place: str) -> str:
     except ValueError as e:
         return str(e)
 
+    sites.check_map()
     state = robot.get_state()
     proposal = robot.plan(goal, name)
     verdict = gate.evaluate(state, proposal)
@@ -182,6 +229,7 @@ def confirm_move(token: str) -> str:
     except TokenError as e:
         return str(e)
 
+    sites.check_map()
     state = robot.get_state()
     verdict = gate.evaluate(state, pending.proposal)
     gate.commit(verdict, pending.proposal)
@@ -243,7 +291,8 @@ def get_scene() -> str:
     site = sites.current()
     s = robot.get_state()
     scene = {
-        "site": {"name": site.name, "revision": sites.revision},
+        "site": {"name": site.name, "revision": sites.revision,
+                 "map_check": sites.map_check},
         "robot": {
             "x": s.pose.x, "y": s.pose.y, "yaw": s.pose.yaw,
             "moving": s.moving, "voltage": round(s.voltage, 1),
@@ -312,6 +361,12 @@ async def operator_save(request: Request) -> JSONResponse:
     print(f"Site {site.name!r} saved: {len(site.places)} places, "
           f"{len(site.zones)} zones")
     return await operator_site(request)
+
+
+@mcp.custom_route("/operator/check-map", methods=["POST"])
+async def operator_check_map(request: Request) -> JSONResponse:
+    """Fetch the robot's map again and compare, e.g. after restarting Nav2."""
+    return JSONResponse(sites.check_map(refetch=True))
 
 
 @mcp.custom_route("/operator/sites", methods=["GET"])

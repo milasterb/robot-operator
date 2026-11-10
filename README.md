@@ -307,6 +307,19 @@ With a real robot it cannot: the zones only mean something in the frame of
 the map Nav2 is localising against, so the site is chosen when the server
 starts.
 
+With a real robot, **Place at robot** adds a place exactly where the robot
+stands: drive it there with the keyboard, click, name it. The coordinates
+are right by construction, and the spot is one the robot has reached.
+
+The zones are coordinates, so they only mean something on the map they were
+drawn on. When the server connects to a real robot it asks Nav2's
+`map_server` for the map it is localising against and compares it with the
+site's: resolution, size, origin and the cells themselves. If they differ,
+the gate refuses every trip and the panel says why. If the robot's map
+cannot be read at all, the panel says the zones are unverified but trips are
+not blocked. The comparison is repeated every minute and on **Check again**,
+so restarting Nav2 on another map is caught too.
+
 None of this is an MCP tool. The model cannot list, change or even see the
 editing routes, because it must never be able to move the fences it is kept
 inside.
@@ -336,8 +349,9 @@ exception for the charger.
 pytest
 ```
 
-Seventeen tests over the gate and seventeen over sites — what a valid map,
-place and zone is, and that a broken map never becomes a site. The two that
+Seventeen tests over the gate and twenty-two over sites — what a valid map,
+place and zone is, that a broken map never becomes a site, and that a
+robot on a different map is refused. The two that
 matter most are not about any individual rule:
 
 - `test_evaluate_changes_nothing` — asking the gate a question must not alter

@@ -97,3 +97,57 @@ def test_a_broken_map_never_becomes_a_site(tmp_path, monkeypatch):
     with pytest.raises(SiteError):
         create_site("Broken", yaml_text, b"P5\n384 384\n255\n" + b"\x00" * 10)
     assert list(tmp_path.iterdir()) == []
+
+
+# ---- is the robot on the same map? ------------------------------------------
+
+def robot_view(grid, shift=0.0, flip=None):
+    """The grid as Nav2 would send it: row 0 at the bottom, -1/0/100."""
+    data = []
+    for row in range(grid.height):
+        line = grid.cells[(grid.height - 1 - row) * grid.width:(grid.height - row) * grid.width]
+        data.extend({0: 0, 1: -1, 2: 100}[c] for c in line)
+    if flip:
+        for i in range(0, len(data), flip):
+            data[i] = 100 if data[i] != 100 else 0
+    return {"resolution": grid.resolution, "width": grid.width, "height": grid.height,
+            "origin": (grid.origin[0] + shift, grid.origin[1]), "data": data}
+
+
+def test_the_same_map_matches():
+    from layout import compare_with_robot
+    grid = load_grid(OBYVAK / "map.yaml")
+    assert compare_with_robot(grid, robot_view(grid)) is None
+
+
+@pytest.mark.parametrize("change, message", [
+    ({"shift": 0.5}, "different origins"),
+    ({"flip": 10}, "agree"),          # every tenth cell differs: another mapping run
+])
+def test_a_different_map_is_caught(change, message):
+    from layout import compare_with_robot
+    grid = load_grid(OBYVAK / "map.yaml")
+    assert message in compare_with_robot(grid, robot_view(grid, **change))
+
+
+def test_a_differently_sized_map_is_caught():
+    from layout import compare_with_robot
+    grid = load_grid(OBYVAK / "map.yaml")
+    other = robot_view(grid)
+    other["width"] -= 1
+    assert "cells" in compare_with_robot(grid, other)
+
+
+def test_the_gate_refuses_everything_on_the_wrong_map():
+    from gate.gate import Gate
+    from gate.rules import GateConfig
+    from gate.types import Level, MoveProposal, Point, Pose, RobotState
+
+    state = RobotState(12.0, 12.0, Pose(0, 0, 0), 2.0, False, True, timestamp=0.0)
+    trip = MoveProposal(Point(1, 0), "somewhere", [Point(0, 0), Point(1, 0)], 2.0)
+    assert Gate(GateConfig()).evaluate(state, trip, now=0.0).level is Level.ALLOW
+
+    wrong = Gate(GateConfig(map_mismatch="The two maps start at different origins."))
+    verdict = wrong.evaluate(state, trip, now=0.0)
+    assert verdict.level is Level.STOP
+    assert "different map" in verdict.reasons[0]

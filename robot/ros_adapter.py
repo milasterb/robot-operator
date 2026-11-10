@@ -375,6 +375,30 @@ class RosRobot:
             )
         )
 
+    def fetch_map(self, timeout: float = 5.0) -> dict | None:
+        """Nav2's map, straight from its map_server, or None if unavailable.
+
+        A plain service (nav_msgs/GetMap), so rosbridge can reach it. The
+        server compares it with the site's map: zones drawn on one map are
+        meaningless on another.
+        """
+        try:
+            res = roslibpy.Service(
+                self.ros, "/map_server/map", "nav_msgs/GetMap",
+            ).call(roslibpy.ServiceRequest({}), timeout=timeout)
+            grid = res["map"]
+            info = grid["info"]
+            origin = info["origin"]["position"]
+            return {
+                "resolution": float(info["resolution"]),
+                "width": int(info["width"]),
+                "height": int(info["height"]),
+                "origin": (float(origin["x"]), float(origin["y"])),
+                "data": list(grid["data"]),
+            }
+        except Exception:
+            return None
+
     def _read_speed_base(self) -> None:
         """Remember the controller's nominal speeds, once, at connect.
 

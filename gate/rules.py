@@ -29,6 +29,11 @@ class GateConfig:
     charger_name: str = "the charger"
     zones: list[Zone] = field(default_factory=list)
 
+    # Set when the map the zones were drawn on is not the map the robot is
+    # localising against. Zones are coordinates; in the wrong map they fence
+    # off the wrong floor, silently. None means no known disagreement.
+    map_mismatch: str | None = None
+
 
 def point_in_polygon(p: Point, polygon: list[Point]) -> bool:
     """Ray casting. Returns True when the point lies inside the polygon."""
@@ -65,6 +70,21 @@ def check_localization(
         return Verdict(
             Level.STOP,
             ["The robot does not know where it is on the map."],
+            0.0,
+        )
+    return None
+
+
+def check_map(
+    state: RobotState, proposal: MoveProposal, cfg: GateConfig,
+    now: float, previous: Level,
+) -> Verdict | None:
+    if cfg.map_mismatch:
+        return Verdict(
+            Level.STOP,
+            ["The robot is using a different map from the one its forbidden "
+             f"zones were drawn on, so I cannot tell where they are. "
+             f"{cfg.map_mismatch}"],
             0.0,
         )
     return None
@@ -182,6 +202,7 @@ def check_obstacle(
 RULES = [
     check_state_age,
     check_localization,
+    check_map,
     check_battery,
     check_plan,
     check_zones,

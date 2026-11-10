@@ -192,6 +192,17 @@ select.mini option { background: var(--panel); color: var(--text); }
   position: absolute; left: 14px; bottom: 12px;
   font: 400 11px var(--mono); color: var(--faint);
 }
+#mapcheck {
+  position: absolute; left: 12px; right: 12px; bottom: 34px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; border-radius: 6px;
+  font: 500 12px var(--sans); line-height: 1.4;
+}
+#mapcheck .txt { flex: 1; }
+#mapcheck.mismatch { background: rgba(226,72,61,.16); border: 1px solid var(--stop); color: #f6b3ad; }
+#mapcheck.unverified { background: rgba(242,194,48,.12); border: 1px solid rgba(242,194,48,.6); color: #f5dc8a; }
+#mapcheck.match { left: auto; padding: 0; bottom: 10px; color: var(--allow); font-weight: 400; font-size: 11px; }
+#mapcheck.match .mini { display: none; }
 
 #telemetry { display: flex; border-top: 1px solid var(--line); background: var(--panel); }
 #telemetry div { flex: 1; padding: 11px 16px; }
@@ -312,11 +323,16 @@ select.mini option { background: var(--panel); color: var(--text); }
     <div class="map-wrap" id="mapwrap">
       <canvas id="map"></canvas>
       <div id="maphint">1 m grid</div>
+      <div id="mapcheck" class="hidden" role="status">
+        <span class="txt"></span>
+        <button class="mini" id="recheck" title="Read the robot's map again and compare">Check again</button>
+      </div>
       <div id="editbar" class="hidden">
         <button class="mini tool on" data-tool="move" title="Drag places and zone corners">Move</button>
         <button class="mini tool" data-tool="place" title="Click to add a named place">Place</button>
         <button class="mini tool" data-tool="zone" title="Click corners; click the first corner or press Enter to close">Zone</button>
         <button class="mini tool" data-tool="delete" title="Click a place or zone to remove it">Delete</button>
+        <button class="mini" id="placehere" title="Add a place exactly where the robot is now">Place at robot</button>
         <span class="sep"></span>
         <button class="mini primary" id="editsave">Save</button>
         <button class="mini" id="editcancel">Cancel</button>
@@ -732,6 +748,35 @@ async function saveEdits() {
   refresh();
 }
 
+// Drive the robot to a spot with the keyboard, then pin the place there:
+// right coordinates, and a spot the robot has demonstrably reached.
+$("placehere").onclick = () => {
+  const r = scene && scene.robot;
+  if (!r || !r.localized) { help("The robot does not know where it is, so there is no position to use.", true); return; }
+  const name = askName("place", "the ");
+  if (!name) return;
+  draft.places.push({ name, x: r.x, y: r.y });
+  help("Added “" + name + "” at the robot: " + r.x.toFixed(2) + ", " + r.y.toFixed(2) + ". Save to keep it.");
+  draw();
+};
+
+/* Is the robot localising against the map these zones are drawn on? */
+const MAPCHECK = {
+  mismatch: "Different map on the robot — every trip is refused. ",
+  unverified: "⚠ ",
+  match: "✓ the robot is using this map",
+};
+function showMapCheck(c) {
+  const box = $("mapcheck");
+  if (!c || c.status === "simulated" || c.status === "unknown") { box.classList.add("hidden"); return; }
+  box.className = c.status;
+  box.querySelector(".txt").textContent =
+    MAPCHECK[c.status] + (c.status === "match" ? "" : c.detail);
+}
+$("recheck").onclick = async () => {
+  showMapCheck(await (await fetch("/api/operator/check-map", { method: "POST" })).json());
+};
+
 document.querySelectorAll("#editbar .tool").forEach(b => b.onclick = () => setTool(b.dataset.tool));
 $("editbtn").onclick = startEditing;
 $("editcancel").onclick = stopEditing;
@@ -794,6 +839,7 @@ async function refresh() {
     $("led-robot").className = "led on";
     // The operator changed the map or its fences: fetch the new site.
     if (scene.site && scene.site.revision !== siteRevision && !editing) await loadSite();
+    showMapCheck(scene.site && scene.site.map_check);
 
     const v = scene.robot.voltage;
     const volt = $("volt");

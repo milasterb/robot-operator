@@ -377,6 +377,46 @@ def _format(data: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+# How much of the grid may differ and still count as the same map. A map
+# copied from the robot matches exactly; this only absorbs a few cells
+# touched up in an image editor.
+MAP_MATCH = 0.98
+
+
+def compare_with_robot(grid: GridMap | None, robot_map: dict) -> str | None:
+    """None if the robot is localising against this map, else what differs.
+
+    `robot_map` is Nav2's own OccupancyGrid as the adapter fetched it:
+    resolution, width, height, origin (x, y) and data, row 0 at the origin
+    (the bottom of the image), -1 unknown, 0 free, 100 occupied.
+    """
+    if grid is None:
+        return "This site has no map to compare against."
+    if abs(robot_map["resolution"] - grid.resolution) > 1e-6:
+        return (f"The robot's map has {robot_map['resolution']:.3f} m cells, "
+                f"this one {grid.resolution:.3f} m.")
+    if (robot_map["width"], robot_map["height"]) != (grid.width, grid.height):
+        return (f"The robot's map is {robot_map['width']}x{robot_map['height']} "
+                f"cells, this one {grid.width}x{grid.height}.")
+    ox, oy = robot_map["origin"]
+    if abs(ox - grid.origin[0]) > 1e-3 or abs(oy - grid.origin[1]) > 1e-3:
+        return "The two maps start at different origins."
+
+    data = robot_map["data"]
+    if len(data) != grid.width * grid.height:
+        return "The robot sent a map of the wrong length."
+    same = 0
+    for row in range(grid.height):
+        mine = grid.cells[(grid.height - 1 - row) * grid.width:(grid.height - row) * grid.width]
+        theirs = data[row * grid.width:(row + 1) * grid.width]
+        for c, d in zip(mine, theirs):
+            same += c == (1 if d < 0 else 2 if d >= 65 else 0 if d <= 25 else 1)
+    share = same / len(data)
+    if share < MAP_MATCH:
+        return f"Only {share:.0%} of the two maps agree."
+    return None
+
+
 def load_grid(yaml_path: Path) -> GridMap:
     """Read a map saved by Nav2's map_saver: a small YAML file and a PGM."""
     try:
