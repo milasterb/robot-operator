@@ -585,6 +585,22 @@ function fit() {
 const px = p => [T.ox + p.x * T.s, T.oy - p.y * T.s];
 let manualView = false;
 
+// The charger: a green disc with a lightning bolt, drawn as a path so it
+// looks the same in every browser (an emoji does not).
+function drawChargerIcon(a, b) {
+  cx.beginPath(); cx.arc(a, b, 7.5, 0, 7);
+  cx.fillStyle = "#5fb87a"; cx.fill();
+  cx.beginPath();
+  cx.moveTo(a + 1.2, b - 5.2);
+  cx.lineTo(a - 3.2, b + 0.8);
+  cx.lineTo(a - 0.2, b + 0.8);
+  cx.lineTo(a - 1.2, b + 5.2);
+  cx.lineTo(a + 3.2, b - 0.8);
+  cx.lineTo(a + 0.2, b - 0.8);
+  cx.closePath();
+  cx.fillStyle = "#171a1e"; cx.fill();
+}
+
 function draw() {
   const w = cv.clientWidth, h = cv.clientHeight;
   cx.clearRect(0, 0, w, h);
@@ -665,12 +681,12 @@ function draw() {
     );
     if (shadowed) return;
     const [a, b] = px(p);
-    cx.beginPath(); cx.arc(a, b, p.charger ? 5 : 3.5, 0, 7);
-    cx.fillStyle = p.charger ? "#5fb87a" : "#6f7a86"; cx.fill();
+    if (p.charger) drawChargerIcon(a, b);
+    else { cx.beginPath(); cx.arc(a, b, 3.5, 0, 7); cx.fillStyle = "#6f7a86"; cx.fill(); }
     cx.fillStyle = p.charger ? "#8fd4a5" : "#929ba6";
     cx.font = "400 12px 'IBM Plex Sans', sans-serif";
     cx.textAlign = "center";
-    cx.fillText((p.charger ? "⚡ " : "") + p.name.replace(/^the /, ""), a, b - 11);
+    cx.fillText(p.name.replace(/^the /, ""), a, b - (p.charger ? 14 : 11));
   });
 
   if (editing) drawEditOverlay();
