@@ -318,6 +318,7 @@ select.mini option { background: var(--panel); color: var(--text); }
       <select id="sitepick" class="mini hidden" title="Switch site"></select>
       <button id="newmap" class="mini hidden" title="Load a map saved by map_saver (.yaml + .pgm)">New map…</button>
       <input id="mapfiles" type="file" accept=".yaml,.yml,.pgm" multiple class="hidden">
+      <button id="fitview" class="mini hidden" title="Show the whole room again (or double-click the map)">Fit</button>
       <button id="editbtn" class="mini">Edit map</button>
     </h2>
     <div class="map-wrap" id="mapwrap">
@@ -401,7 +402,7 @@ async function loadSite() {
   MAP.x1 = MAP.origin[0] + MAP.size[0] * MAP.res;
   MAP.y1 = MAP.origin[1] + MAP.size[1] * MAP.res;
   $("maphint").innerHTML = "1 m grid &nbsp;·&nbsp; occupancy map, "
-    + MAP.res.toFixed(2) + " m/px";
+    + MAP.res.toFixed(2) + " m/px &nbsp;·&nbsp; scroll to zoom, drag to pan";
   mapImg.src = "/api/operator/map.png?r=" + site.revision;
 }
 
@@ -425,7 +426,10 @@ function fit() {
   cv.width = w * devicePixelRatio;
   cv.height = h * devicePixelRatio;
   cx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-  if (!scene) return;
+  // Once the operator zooms or pans, the view is theirs until they press
+  // Fit. Only the picture moves: places, zones and the robot keep their
+  // coordinates in metres, which is all the robot and the gate ever see.
+  if (!scene || manualView) return;
   const pts = [...scene.places, scene.robot];
   (scene.zones || []).forEach(z => pts.push(...z.polygon));
   // Keep the whole surveyed area in frame. Without this the view fits the
@@ -441,6 +445,7 @@ function fit() {
   T.oy = h / 2 + ((Math.max(...ys) + Math.min(...ys)) / 2) * T.s;
 }
 const px = p => [T.ox + p.x * T.s, T.oy - p.y * T.s];
+let manualView = false;
 
 function draw() {
   const w = cv.clientWidth, h = cv.clientHeight;
@@ -590,7 +595,7 @@ function help(text, err) {
 }
 
 const HELP = {
-  move: "Drag a place or a zone corner to move it. Scroll to zoom.",
+  move: "Drag a place or a zone corner to move it, or empty floor to pan. Scroll to zoom.",
   place: "Click where the robot should be able to go, then name the place.",
   zone: "Click the corners of a forbidden area. Click the first corner again or press Enter to close it; Esc to undo.",
   delete: "Click a place or inside a zone to remove it.",
@@ -687,11 +692,12 @@ addEventListener("mousemove", e => {
 });
 addEventListener("mouseup", () => { dragging = null; });
 
-// Zoom around the cursor while editing: corners of a zone want centimetres,
-// and the fitted view shows the whole room.
+// Zoom around the cursor, drag empty floor to pan, Fit (or double-click)
+// to go back to the whole room.
 cv.addEventListener("wheel", e => {
-  if (!editing) return;
   e.preventDefault();
+  manualView = true;
+  $("fitview").classList.remove("hidden");
   const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
   const before = world(mx, my);
   T.s = Math.min(800, Math.max(10, T.s * Math.exp(-e.deltaY * 0.0015)));
@@ -699,6 +705,30 @@ cv.addEventListener("wheel", e => {
   T.oy = my + before.y * T.s;
   draw();
 }, { passive: false });
+
+let panning = null;
+cv.addEventListener("mousedown", e => {
+  if (dragging || (editing && tool !== "move")) return;  // the editor got it first
+  panning = { x: e.clientX, y: e.clientY, ox: T.ox, oy: T.oy };
+  cv.style.cursor = "grabbing";
+});
+addEventListener("mousemove", e => {
+  if (!panning) return;
+  const dx = e.clientX - panning.x, dy = e.clientY - panning.y;
+  if (!manualView && Math.hypot(dx, dy) < 3) return;   // a click, not a drag
+  manualView = true;
+  $("fitview").classList.remove("hidden");
+  T.ox = panning.ox + dx; T.oy = panning.oy + dy;
+  draw();
+});
+addEventListener("mouseup", () => { panning = null; cv.style.cursor = ""; });
+
+function resetView() {
+  manualView = false;
+  $("fitview").classList.add("hidden");
+  fit(); draw();
+}
+cv.addEventListener("dblclick", e => { if (!editing || tool === "move") resetView(); });
 
 addEventListener("keydown", e => {
   if (!editing || tool !== "zone" || e.target.tagName === "INPUT") return;
@@ -779,6 +809,7 @@ $("recheck").onclick = async () => {
 
 document.querySelectorAll("#editbar .tool").forEach(b => b.onclick = () => setTool(b.dataset.tool));
 $("editbtn").onclick = startEditing;
+$("fitview").onclick = resetView;
 $("editcancel").onclick = stopEditing;
 $("editsave").onclick = saveEdits;
 
@@ -850,7 +881,7 @@ async function refresh() {
     $("state").textContent = !scene.robot.localized ? "lost"
       : scene.robot.moving ? "driving" : "stopped";
 
-    if (!editing) fit();
+    fit();
     draw();
   } catch (e) {
     $("led-robot").className = "led off";
