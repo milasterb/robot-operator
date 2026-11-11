@@ -141,12 +141,15 @@ the robot refuse to move at exactly the moment it starts moving. The raw value
 is still carried in `RobotState.voltage_raw` so it can be shown and logged.
 
 **A flat battery does not strand the robot.** Below 10.8 V every trip is
-refused — except one. A move whose goal is the charger is allowed, at reduced
+refused — except one. A move whose goal is the charger — the place marked
+`"charger": true` in the site, with the **Charger** tool in the editor — is allowed, at reduced
 speed, with the reason said out loud. The alternative is a gate that is
 correct and useless: a robot that has decided it is too low on power to move,
 and therefore cannot reach the thing that would fix that. The exception lives
 inside `check_battery` rather than in a rule of its own, because it is a
 property of the battery rule and nothing else.
+A map with no charger marked has no exception: on a flat battery every trip
+is refused, and the robot says why.
 
 **Verdicts have hysteresis.** Without it, a robot sitting at 10.79 V flips
 between STOP and LIMIT with every reading and the light bar strobes. The
@@ -263,26 +266,28 @@ above) but because a demo that behaves the same twice is easier to trust.
 
 ### Language: English or Czech
 
-```bash
-ROBOT_LANG=cs        # in .env, or in front of both commands; default en
-```
+The **CZ / EN** switch in the panel's header changes the language of the
+robot and of every open panel at once. `ROBOT_LANG=cs` in `.env` only sets
+which one it starts in (default `en`); a switch lasts until the next restart.
 
-Both processes read it: `server.py` for what the tools and the gate say,
-`host.server` for the system prompt and the panel. Restart both after
-changing it. Every sentence about safety is a fixed template in `i18n.py` —
-the model reads the gate's reasons out, it does not translate them, so a
-refusal says exactly the same thing whichever model is answering. Czech uses
-a decimal comma and quotes place names („kuchyň“); spoken names are matched
-without diacritics, so *kuchyne* finds *kuchyň*. The panel takes the language
-from the host, including the speech recogniser and the voice (`cs-CZ`), which
-needs a Czech voice installed in the browser or the OS.
+The robot server owns the language, because the robot's sentences are
+written there; the host asks it before every utterance and uses the matching
+system prompt. Switching also starts a new conversation — a small model given
+half a conversation in each language tends to stay in the first — and
+withdraws a trip that was offered but not yet confirmed, so nobody confirms a
+sentence they read before the switch. **New chat** in the conversation header
+forgets the conversation without changing the language.
+
+Every sentence about safety is a fixed template in `i18n.py`: the model reads
+the gate's reasons out, it does not translate them, so a refusal says exactly
+the same thing whichever model is answering. Czech uses a decimal comma and
+quotes place names („kuchyň“); spoken names are matched without diacritics,
+so *kuchyne* finds *kuchyň*. The speech recogniser and the voice follow the
+switch (`cs-CZ`), which needs a Czech voice installed in the browser or the OS.
 
 The language changes only words. `tests/test_i18n.py` checks that the gate
 reaches the same verdicts in both, and that every message has the same blanks
 in both.
-
-The charger is the place named by `gate.charger`: *the charger* in English,
-*nabíječka* in Czech — give a Czech site a place with that name.
 
 ### Against the real robot
 

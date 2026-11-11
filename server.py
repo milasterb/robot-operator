@@ -15,7 +15,7 @@ from starlette.responses import JSONResponse, Response
 from gate.gate import Gate
 from gate.rules import GateConfig
 from gate.types import Level, Point
-from i18n import language, num, seconds_ago, t
+from i18n import SUPPORTED, language, num, seconds_ago, set_language, t
 from layout import (
     Site, SiteError, compare_with_robot, create_site, list_sites, load_site, log_change,
     parse_site, save_site, site_folder,
@@ -41,7 +41,9 @@ else:
 # robot_width is the one number here that is not measured from the map.
 # Measure the X3 across its widest point, wheels included, before trusting
 # the clearance rules: they are both derived from it.
-gate = Gate(GateConfig(robot_width=0.20, charger_name=t("gate.charger")))
+# The charger comes from the site (a place marked "charger": true), set in
+# SiteKeeper._apply below — never from a word in some language.
+gate = Gate(GateConfig(robot_width=0.20, charger_name=None))
 tokens = TokenStore()
 
 
@@ -98,7 +100,8 @@ class SiteKeeper:
         tokens.discard_all()
 
     def _apply(self, site: Site) -> None:
-        gate.config = dataclasses.replace(gate.config, zones=list(site.zones))
+        gate.config = dataclasses.replace(
+            gate.config, zones=list(site.zones), charger_name=site.charger)
         if isinstance(robot, FakeRobot):
             robot.places = dict(site.places)
         self.check_map(refetch=True)
@@ -294,13 +297,15 @@ def get_scene() -> str:
     scene = {
         "site": {"name": site.name, "revision": sites.revision,
                  "map_check": sites.map_check},
+        "lang": language(),
         "robot": {
             "x": s.pose.x, "y": s.pose.y, "yaw": s.pose.yaw,
             "moving": s.moving, "voltage": round(s.voltage, 1),
             "localized": s.localized,
         },
         "places": [
-            {"name": n, "x": p.x, "y": p.y} for n, p in site.places.items()
+            {"name": n, "x": p.x, "y": p.y, "charger": n == site.charger}
+            for n, p in site.places.items()
         ],
         "zones": [
             {
@@ -411,6 +416,32 @@ async def operator_switch(request: Request) -> JSONResponse:
     except SiteError as e:
         return _error(str(e))
     return await operator_site(request)
+
+
+@mcp.custom_route("/operator/language", methods=["GET"])
+async def operator_language(request: Request) -> JSONResponse:
+    return JSONResponse({"lang": language(), "languages": list(SUPPORTED)})
+
+
+@mcp.custom_route("/operator/language", methods=["POST"])
+async def operator_set_language(request: Request) -> JSONResponse:
+    """Switch what the robot says and the panel shows, for everyone.
+
+    Only words change; the gate decides exactly as before. A trip offered in
+    the old language is withdrawn, so nobody confirms a sentence they read
+    before the switch. Back to ROBOT_LANG on the next start.
+    """
+    try:
+        code = str((await request.json())["lang"])
+    except (json.JSONDecodeError, KeyError, TypeError):
+        code = ""
+    if code not in SUPPORTED:
+        return _error(t("op.which_language", codes=", ".join(SUPPORTED)))
+    if code != language():
+        set_language(code)
+        tokens.discard_all()
+        print(f"Language switched to {code}")
+    return await operator_language(request)
 
 
 def _error(message: str, status: int = 400) -> JSONResponse:

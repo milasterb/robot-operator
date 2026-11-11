@@ -27,7 +27,9 @@ class GateConfig:
     # freshness, seconds
     max_state_age: float = 2.0
 
-    charger_name: str = "the charger"
+    # The place the robot may still drive to on a flat battery. A site marks
+    # it in site.json ("charger": true); None means this map has none.
+    charger_name: str | None = "the charger"
     zones: list[Zone] = field(default_factory=list)
 
     # Set when the map the zones were drawn on is not the map the robot is
@@ -94,7 +96,9 @@ def check_battery(
     now: float, previous: Level,
 ) -> Verdict | None:
     v = state.voltage
-    heading_to_charger = proposal.goal_name == cfg.charger_name
+    heading_to_charger = (
+        cfg.charger_name is not None and proposal.goal_name == cfg.charger_name
+    )
 
     stop_at = cfg.voltage_stop
     limit_at = cfg.voltage_limit
@@ -112,7 +116,8 @@ def check_battery(
             )
         return Verdict(
             Level.STOP,
-            [t("gate.battery_stop", v=num(v))],
+            [t("gate.battery_stop" if cfg.charger_name else "gate.battery_no_charger",
+               v=num(v))],
             0.0,
         )
     if v < limit_at:

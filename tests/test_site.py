@@ -151,3 +151,43 @@ def test_the_gate_refuses_everything_on_the_wrong_map():
     verdict = wrong.evaluate(state, trip, now=0.0)
     assert verdict.level is Level.STOP
     assert "different map" in verdict.reasons[0]
+
+
+# ---- the charger is part of the map, not a word -----------------------------
+
+def test_the_charger_is_marked_on_the_map(tmp_path):
+    data = site(places=[{"name": "dock", "x": 0, "y": 0, "charger": True},
+                        {"name": "the door", "x": 2.0, "y": 0.5}])
+    s = parse_site(data, tmp_path, None)
+    assert s.charger == "dock"
+    save_site(s)
+    assert load_site(tmp_path).charger == "dock"
+    assert parse_site(site(), tmp_path, None).charger is None
+
+
+@pytest.mark.parametrize("places, message", [
+    ([{"name": "a", "x": 0, "y": 0, "charger": True},
+      {"name": "b", "x": 1, "y": 1, "charger": True}], "Two places are marked"),
+    ([{"name": "a", "x": 0, "y": 0, "charger": "yes"}], "true or false"),
+])
+def test_a_wrong_charger_mark_is_refused(places, message):
+    with pytest.raises(SiteError, match=message):
+        parse_site(site(places=places), Path("x"), None)
+
+
+def test_on_a_flat_battery_only_the_marked_charger_is_allowed():
+    from gate.gate import Gate
+    from gate.rules import GateConfig
+    from gate.types import Level, MoveProposal, Point, Pose, RobotState
+
+    flat = RobotState(10.5, 10.5, Pose(0, 0, 0), 2.0, False, True, timestamp=0.0)
+
+    def go(name, charger):
+        trip = MoveProposal(Point(1, 0), name, [Point(0, 0), Point(1, 0)], 2.0)
+        return Gate(GateConfig(charger_name=charger)).evaluate(flat, trip, now=0.0)
+
+    assert go("dock", "dock").level is Level.LIMIT
+    assert go("kitchen", "dock").level is Level.STOP
+    refused = go("the charger", None)          # no mark: the old name means nothing
+    assert refused.level is Level.STOP
+    assert "no charger is marked" in refused.reasons[0]

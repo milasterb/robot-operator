@@ -2,7 +2,7 @@
   "name": "Demo flat (simulated)",
   "map": null,
   "places": [
-    {"name": "the charger", "x": 0.0, "y": 0.0},
+    {"name": "the charger", "x": 0.0, "y": 0.0, "charger": true},
     {"name": "the kitchen", "x": 3.0, "y": 0.5},
     {"name": "the living room", "x": 1.5, "y": 2.5},
     {"name": "the bathroom", "x": 3.0, "y": -2.0},

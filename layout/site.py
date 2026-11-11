@@ -119,6 +119,7 @@ class Site:
     zones: list[Zone] = field(default_factory=list)
     map_file: str | None = None
     grid: GridMap | None = None
+    charger: str | None = None      # the place marked "charger": true, if any
     _png: bytes | None = field(default=None, repr=False, compare=False)
     _meta: dict | None = field(default=None, repr=False, compare=False)
 
@@ -128,7 +129,8 @@ class Site:
             "name": self.name,
             "map": self.map_file,
             "places": [
-                {"name": n, "x": round(p.x, 3), "y": round(p.y, 3)}
+                {"name": n, "x": round(p.x, 3), "y": round(p.y, 3),
+                 **({"charger": True} if n == self.charger else {})}
                 for n, p in self.places.items()
             ],
             "zones": [
@@ -212,6 +214,7 @@ def parse_site(data: dict, folder: Path, grid: GridMap | None) -> Site:
         raise SiteError(t("site.too_many_zones", n=MAX_ZONES))
 
     places: dict[str, Point] = {}
+    charger: str | None = None
     for item in raw_places:
         if not isinstance(item, dict):
             raise SiteError(t("site.place_shape"))
@@ -221,6 +224,13 @@ def parse_site(data: dict, folder: Path, grid: GridMap | None) -> Site:
         point = _point(item.get("x"), item.get("y"), t("site.where.place", name=pname))
         _inside_map(point, grid, "place", pname)
         places[pname] = point
+        flag = item.get("charger", False)
+        if not isinstance(flag, bool):
+            raise SiteError(t("site.charger_flag", name=pname))
+        if flag:
+            if charger is not None:
+                raise SiteError(t("site.two_chargers", a=charger, b=pname))
+            charger = pname
 
     zones: list[Zone] = []
     for item in raw_zones:
@@ -251,7 +261,7 @@ def parse_site(data: dict, folder: Path, grid: GridMap | None) -> Site:
     map_file = data.get("map")
     if map_file is not None and not isinstance(map_file, str):
         raise SiteError(t("site.map_field"))
-    return Site(name, folder, places, zones, map_file, grid)
+    return Site(name, folder, places, zones, map_file, grid, charger=charger)
 
 
 def save_site(site: Site) -> None:

@@ -56,6 +56,14 @@ class Agent:
         self.mcp = mcp
         self.llm = llm or from_env()
         self.tools: list[Tool] = []
+        # Bumped on every fresh start, so each open panel notices and clears
+        # its own copy of the conversation.
+        self.conversation = 1
+
+    def reset(self) -> None:
+        """Forget the conversation: a new chat, or a change of language."""
+        self.llm.reset()
+        self.conversation += 1
 
     async def start(self) -> None:
         await self.mcp.initialize()

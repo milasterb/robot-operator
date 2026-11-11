@@ -50,6 +50,7 @@ class Backend(Protocol):
     label: str
 
     def add_user(self, text: str) -> None: ...
+    def reset(self) -> None: ...
     async def step(self, system: str, tools: list[Tool]) -> Reply: ...
     def add_results(self, results: list[tuple[ToolCall, str]]) -> None: ...
 
@@ -74,6 +75,9 @@ class AnthropicBackend:
 
     def add_user(self, text: str) -> None:
         self.messages.append({"role": "user", "content": text})
+
+    def reset(self) -> None:
+        self.messages.clear()
 
     async def step(self, system: str, tools: list[Tool]) -> Reply:
         # No temperature here: the current Anthropic SDK no longer takes
@@ -127,6 +131,9 @@ class OllamaBackend:
 
     def add_user(self, text: str) -> None:
         self.messages.append({"role": "user", "content": text})
+
+    def reset(self) -> None:
+        self.messages.clear()
 
     async def step(self, system: str, tools: list[Tool]) -> Reply:
         body: dict[str, Any] = {

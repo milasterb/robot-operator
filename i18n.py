@@ -83,6 +83,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Battery is down to {v} volts. The only trip I can make is to the charger.",
         "cs": "Baterie má už jen {v} voltu. Jediná cesta, kterou můžu udělat, je k nabíječce.",
     },
+    "gate.battery_no_charger": {
+        "en": "Battery is down to {v} volts, too low to drive, and no charger is marked on this map.",
+        "cs": "Baterie má už jen {v} voltu, to je na jízdu málo, a na téhle mapě není označená nabíječka.",
+    },
     "gate.battery_limit": {
         "en": "Battery is at {v} volts, so I will drive at half speed.",
         "cs": "Baterie má {v} voltu, takže pojedu poloviční rychlostí.",
@@ -110,10 +114,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "gate.obstacle": {
         "en": "Something is {d} metres away from me, too close to start moving.",
         "cs": "Něco je ode mě jen {d} metru, to je moc blízko na rozjezd.",
-    },
-    "gate.charger": {
-        "en": "the charger",
-        "cs": "nabíječka",
     },
 
     # ---- the tools: what the robot answers ---------------------------------
@@ -259,6 +259,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Each place must be an object with name, x and y.",
         "cs": "Každé místo musí mít name, x a y.",
     },
+    "site.charger_flag": {
+        "en": "Place {name!r}: \"charger\" must be true or false.",
+        "cs": "Místo „{name}“: \"charger\" musí být true nebo false.",
+    },
+    "site.two_chargers": {
+        "en": "Two places are marked as the charger: {a!r} and {b!r}. Mark only one.",
+        "cs": "Jako nabíječka jsou označená dvě místa: „{a}“ a „{b}“. Označ jen jedno.",
+    },
     "site.place_twice": {
         "en": "Two places are called {name!r}.",
         "cs": "Dvě místa se jmenují „{name}“.",
@@ -390,6 +398,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "op.send_map": {
         "en": "Send the map's name, its .yaml text and its .pgm file.",
         "cs": "Pošli jméno mapy, text jejího .yaml a soubor .pgm.",
+    },
+    "op.which_language": {
+        "en": "Language must be one of: {codes}.",
+        "cs": "Jazyk musí být jeden z: {codes}.",
     },
     "op.which_site": {
         "en": "Say which site to switch to.",

@@ -159,7 +159,12 @@ h2 {
 
 .map-wrap { flex: 1; position: relative; min-height: 0; background: var(--sunk); }
 #map { width: 100%; height: 100%; display: block; }
-.maphead { display: flex; align-items: center; gap: 8px; }
+.maphead, .chathead { display: flex; align-items: center; gap: 8px; }
+.chathead .spacer { flex: 1; }
+.langs { display: flex; }
+.langs .mini { border-radius: 0; padding: 2px 8px; }
+.langs .mini:first-child { border-radius: 4px 0 0 4px; }
+.langs .mini + .mini { border-left: none; border-radius: 0 4px 4px 0; }
 .sitename { color: var(--faint); font-weight: 400; }
 .sitename:not(:empty)::before { content: "· "; }
 .maphead .spacer { flex: 1; }
@@ -287,6 +292,9 @@ select.mini option { background: var(--panel); color: var(--text); }
   <div class="status-strip">
     <div class="stat"><span class="led" id="led-mcp"></span>MCP server</div>
     <div class="stat"><span class="led" id="led-robot"></span><span data-i18n="robot_link">Robot link</span></div>
+    <div class="langs" id="langs" title="Language of the robot and this panel" data-i18n-title="t_lang">
+      <button class="mini" data-lang="cs">CZ</button><button class="mini" data-lang="en">EN</button>
+    </div>
     <div class="proto" id="llm" title="Language model (LLM_BACKEND)">model —</div>
     <div class="proto">MCP 2025-11-25</div>
   </div>
@@ -294,7 +302,11 @@ select.mini option { background: var(--panel); color: var(--text); }
 
 <main>
   <div class="col">
-    <h2 data-i18n="conversation">Conversation</h2>
+    <h2 class="chathead">
+      <span data-i18n="conversation">Conversation</span>
+      <span class="spacer"></span>
+      <button id="newchat" class="mini" title="Forget this conversation and start again" data-i18n-title="t_newchat" data-i18n="newchat">New chat</button>
+    </h2>
     <div id="chat">
       <div class="empty" id="chat-empty">
         <p data-i18n="chat_intro">Hold the button below and speak to the robot. Nothing moves until you confirm it.</p>
@@ -332,6 +344,7 @@ select.mini option { background: var(--panel); color: var(--text); }
         <button class="mini tool on" data-tool="move" title="Drag places and zone corners" data-i18n-title="t_move" data-i18n="move">Move</button>
         <button class="mini tool" data-tool="place" title="Click to add a named place" data-i18n-title="t_place" data-i18n="place">Place</button>
         <button class="mini tool" data-tool="zone" title="Click corners; click the first corner or press Enter to close" data-i18n-title="t_zone" data-i18n="zone">Zone</button>
+        <button class="mini tool" data-tool="charger" title="Click the place where the charger stands" data-i18n-title="t_charger" data-i18n="charger">Charger</button>
         <button class="mini tool" data-tool="delete" title="Click a place or zone to remove it" data-i18n-title="t_delete" data-i18n="delete">Delete</button>
         <button class="mini" id="placehere" title="Add a place exactly where the robot is now" data-i18n-title="t_placehere" data-i18n="placehere">Place at robot</button>
         <span class="sep"></span>
@@ -387,6 +400,10 @@ const I18N = {
     map: "Map", newmap: "New map…", fit: "Fit", edit: "Edit map", recheck: "Check again",
     move: "Move", place: "Place", zone: "Zone", delete: "Delete", placehere: "Place at robot",
     save: "Save", cancel: "Cancel", confirm: "Confirm", estop: "Stop the robot",
+    newchat: "New chat", t_newchat: "Forget this conversation and start again",
+    t_lang: "Language of the robot and this panel", lang_failed: "The language could not be switched.",
+    charger: "Charger", t_charger: "Click the place where the charger stands",
+    h_charger: "Click the place where the charger stands; click it again to unmark it. On a flat battery it is the only place the robot may still drive to.",
     battery: "Battery", position: "Position", doing: "Doing",
     lost: "lost", driving: "driving", stopped: "stopped",
     safety_log: "Safety log",
@@ -428,6 +445,10 @@ const I18N = {
     map: "Mapa", newmap: "Nová mapa…", fit: "Celá mapa", edit: "Upravit mapu", recheck: "Zkontrolovat znovu",
     move: "Posun", place: "Místo", zone: "Zóna", delete: "Smazat", placehere: "Místo u robota",
     save: "Uložit", cancel: "Zrušit", confirm: "Potvrdit", estop: "Zastavit robota",
+    newchat: "Nová konverzace", t_newchat: "Zapomenout konverzaci a začít znovu",
+    t_lang: "Jazyk robota i tohoto panelu", lang_failed: "Jazyk se nepodařilo přepnout.",
+    charger: "Nabíječka", t_charger: "Klikni na místo, kde stojí nabíječka",
+    h_charger: "Klikni na místo, kde stojí nabíječka; dalším kliknutím označení zrušíš. Při vybité baterii je to jediné místo, kam robot ještě smí jet.",
     battery: "Baterie", position: "Poloha", doing: "Stav",
     lost: "ztracen", driving: "jede", stopped: "stojí",
     safety_log: "Bezpečnostní záznam",
@@ -469,6 +490,7 @@ const fmt = (v, d) => LANG === "cs" ? v.toFixed(d).replace(".", ",") : v.toFixed
 function applyLang(code) {
   LANG = I18N[code] ? code : "en";
   document.documentElement.lang = LANG;
+  document.querySelectorAll("#langs [data-lang]").forEach(b => b.classList.toggle("on", b.dataset.lang === LANG));
   document.querySelectorAll("[data-i18n]").forEach(e => e.textContent = L(e.dataset.i18n));
   document.querySelectorAll("[data-i18n-title]").forEach(e => e.title = L(e.dataset.i18nTitle));
   document.querySelectorAll("[data-i18n-placeholder]").forEach(e => e.placeholder = L(e.dataset.i18nPlaceholder));
@@ -643,12 +665,12 @@ function draw() {
     );
     if (shadowed) return;
     const [a, b] = px(p);
-    cx.beginPath(); cx.arc(a, b, 3.5, 0, 7);
-    cx.fillStyle = "#6f7a86"; cx.fill();
-    cx.fillStyle = "#929ba6";
+    cx.beginPath(); cx.arc(a, b, p.charger ? 5 : 3.5, 0, 7);
+    cx.fillStyle = p.charger ? "#5fb87a" : "#6f7a86"; cx.fill();
+    cx.fillStyle = p.charger ? "#8fd4a5" : "#929ba6";
     cx.font = "400 12px 'IBM Plex Sans', sans-serif";
     cx.textAlign = "center";
-    cx.fillText(p.name.replace(/^the /, ""), a, b - 11);
+    cx.fillText((p.charger ? "⚡ " : "") + p.name.replace(/^the /, ""), a, b - 11);
   });
 
   if (editing) drawEditOverlay();
@@ -712,6 +734,7 @@ function help(text, err) {
 
 const HELP = () => ({
   move: L("h_move"), place: L("h_place"), zone: L("h_zone"), delete: L("h_delete"),
+  charger: L("h_charger"),
 });
 
 function setTool(t) {
@@ -726,7 +749,7 @@ function startEditing() {
   if (!siteData) return;
   editing = true;
   draft = {
-    places: siteData.places.map(p => ({ name: p.name, x: p.x, y: p.y })),
+    places: siteData.places.map(p => ({ name: p.name, x: p.x, y: p.y, charger: !!p.charger })),
     zones: siteData.zones.map(z => ({ name: z.name, polygon: z.polygon.map(([x, y]) => ({ x, y })) })),
   };
   $("editbar").classList.remove("hidden");
@@ -783,6 +806,13 @@ cv.addEventListener("mousedown", e => {
   } else if (tool === "zone") {
     if (pending.length >= 3 && near(pending[0], mx, my)) closeZone();
     else { pending.push(w); draw(); }
+  } else if (tool === "charger") {
+    const i = draft.places.findIndex(p => near(p, mx, my));
+    if (i < 0) return;
+    const was = draft.places[i].charger;
+    draft.places.forEach(p => p.charger = false);   // one charger per map
+    draft.places[i].charger = !was;
+    draw();
   } else if (tool === "delete") {
     const i = draft.places.findIndex(p => near(p, mx, my));
     if (i >= 0) { draft.places.splice(i, 1); draw(); return; }
@@ -874,7 +904,8 @@ function drawEditOverlay() {
 async function saveEdits() {
   const body = {
     revision: siteRevision,
-    places: draft.places.map(p => ({ name: p.name, x: +p.x.toFixed(3), y: +p.y.toFixed(3) })),
+    places: draft.places.map(p => ({ name: p.name, x: +p.x.toFixed(3), y: +p.y.toFixed(3),
+                                     ...(p.charger ? { charger: true } : {}) })),
     zones: draft.zones.map(z => ({
       name: z.name, kind: "forbidden",
       polygon: z.polygon.map(p => [+p.x.toFixed(3), +p.y.toFixed(3)]),
@@ -982,6 +1013,13 @@ async function refresh() {
     // The operator changed the map or its fences: fetch the new site.
     if (scene.site && scene.site.revision !== siteRevision && !editing) await loadSite();
     showMapCheck(scene.site && scene.site.map_check);
+    // Someone switched the language or started a new chat, maybe in
+    // another tab: the robot has forgotten the conversation, so do we.
+    if (scene.lang && scene.lang !== LANG) applyLang(scene.lang);
+    if (scene.conversation !== undefined && scene.conversation !== conversation) {
+      if (conversation !== null) clearChat();
+      conversation = scene.conversation;
+    }
 
     const v = scene.robot.voltage;
     const volt = $("volt");
@@ -1003,6 +1041,32 @@ refresh();
 setInterval(refresh, 1500);
 
 /* ---------- conversation + log ---------- */
+let conversation = null;                 // the host's conversation number
+const CHAT_EMPTY = $("chat").innerHTML;  // the intro, to put back on a new chat
+
+function clearChat() {
+  $("chat").innerHTML = CHAT_EMPTY;
+  applyLang(LANG);
+  hideCard();
+}
+
+$("newchat").onclick = async () => {
+  try {
+    const out = await (await fetch("/api/reset", { method: "POST" })).json();
+    conversation = out.conversation;
+  } catch (e) { /* the next refresh will tell */ }
+  clearChat();
+};
+
+document.querySelectorAll("#langs [data-lang]").forEach(b => b.onclick = async () => {
+  if (b.dataset.lang === LANG) return;
+  const res = await fetch("/api/language", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ lang: b.dataset.lang }),
+  }).catch(() => null);
+  if (!res || !res.ok) { alert(L("lang_failed")); return; }
+  await refresh();
+});
 function bubble(who, text, you) {
   $("chat-empty")?.remove();
   const d = document.createElement("div");
