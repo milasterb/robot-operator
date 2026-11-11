@@ -283,10 +283,10 @@ select.mini option { background: var(--panel); color: var(--text); }
 <body>
 
 <header>
-  <div class="wordmark">Robot Operator <span>&nbsp;/&nbsp; voice control with a safety gate</span></div>
+  <div class="wordmark">Robot Operator <span>&nbsp;/&nbsp; <span data-i18n="tagline">voice control with a safety gate</span></span></div>
   <div class="status-strip">
     <div class="stat"><span class="led" id="led-mcp"></span>MCP server</div>
-    <div class="stat"><span class="led" id="led-robot"></span>Robot link</div>
+    <div class="stat"><span class="led" id="led-robot"></span><span data-i18n="robot_link">Robot link</span></div>
     <div class="proto" id="llm" title="Language model (LLM_BACKEND)">model —</div>
     <div class="proto">MCP 2025-11-25</div>
   </div>
@@ -294,71 +294,71 @@ select.mini option { background: var(--panel); color: var(--text); }
 
 <main>
   <div class="col">
-    <h2>Conversation</h2>
+    <h2 data-i18n="conversation">Conversation</h2>
     <div id="chat">
       <div class="empty" id="chat-empty">
-        <p>Hold the button below and speak to the robot. Nothing moves until you confirm it.</p>
-        <p>Try:
-          <span class="say">Where are you right now?</span>
-          <span class="say">Drive to the living room</span>
-          <span class="say">Why did you stop?</span>
+        <p data-i18n="chat_intro">Hold the button below and speak to the robot. Nothing moves until you confirm it.</p>
+        <p><span data-i18n="try">Try:</span>
+          <span class="say" data-i18n="try1">Where are you right now?</span>
+          <span class="say" data-i18n="try2">Drive to the living room</span>
+          <span class="say" data-i18n="try3">Why did you stop?</span>
         </p>
       </div>
     </div>
     <div id="input">
-      <button id="mic"><span id="dot"></span><span id="miclabel">Hold to speak</span></button>
-      <input id="text" placeholder="or type instead" autocomplete="off">
+      <button id="mic"><span id="dot"></span><span id="miclabel" data-i18n="hold">Hold to speak</span></button>
+      <input id="text" placeholder="or type instead" data-i18n-placeholder="type" autocomplete="off">
     </div>
   </div>
 
   <div class="col">
     <h2 class="maphead">
-      <span>Map <span id="sitename" class="sitename"></span></span>
+      <span><span data-i18n="map">Map</span> <span id="sitename" class="sitename"></span></span>
       <span class="spacer"></span>
-      <select id="sitepick" class="mini hidden" title="Switch site"></select>
-      <button id="newmap" class="mini hidden" title="Load a map saved by map_saver (.yaml + .pgm)">New map…</button>
+      <select id="sitepick" class="mini hidden" title="Switch site" data-i18n-title="t_sitepick"></select>
+      <button id="newmap" class="mini hidden" title="Load a map saved by map_saver (.yaml + .pgm)" data-i18n-title="t_newmap" data-i18n="newmap">New map…</button>
       <input id="mapfiles" type="file" accept=".yaml,.yml,.pgm" multiple class="hidden">
-      <button id="fitview" class="mini hidden" title="Show the whole room again (or double-click the map)">Fit</button>
-      <button id="editbtn" class="mini">Edit map</button>
+      <button id="fitview" class="mini hidden" title="Show the whole room again (or double-click the map)" data-i18n-title="t_fit" data-i18n="fit">Fit</button>
+      <button id="editbtn" class="mini" data-i18n="edit">Edit map</button>
     </h2>
     <div class="map-wrap" id="mapwrap">
       <canvas id="map"></canvas>
       <div id="maphint">1 m grid</div>
       <div id="mapcheck" class="hidden" role="status">
         <span class="txt"></span>
-        <button class="mini" id="recheck" title="Read the robot's map again and compare">Check again</button>
+        <button class="mini" id="recheck" title="Read the robot's map again and compare" data-i18n-title="t_recheck" data-i18n="recheck">Check again</button>
       </div>
       <div id="editbar" class="hidden">
-        <button class="mini tool on" data-tool="move" title="Drag places and zone corners">Move</button>
-        <button class="mini tool" data-tool="place" title="Click to add a named place">Place</button>
-        <button class="mini tool" data-tool="zone" title="Click corners; click the first corner or press Enter to close">Zone</button>
-        <button class="mini tool" data-tool="delete" title="Click a place or zone to remove it">Delete</button>
-        <button class="mini" id="placehere" title="Add a place exactly where the robot is now">Place at robot</button>
+        <button class="mini tool on" data-tool="move" title="Drag places and zone corners" data-i18n-title="t_move" data-i18n="move">Move</button>
+        <button class="mini tool" data-tool="place" title="Click to add a named place" data-i18n-title="t_place" data-i18n="place">Place</button>
+        <button class="mini tool" data-tool="zone" title="Click corners; click the first corner or press Enter to close" data-i18n-title="t_zone" data-i18n="zone">Zone</button>
+        <button class="mini tool" data-tool="delete" title="Click a place or zone to remove it" data-i18n-title="t_delete" data-i18n="delete">Delete</button>
+        <button class="mini" id="placehere" title="Add a place exactly where the robot is now" data-i18n-title="t_placehere" data-i18n="placehere">Place at robot</button>
         <span class="sep"></span>
-        <button class="mini primary" id="editsave">Save</button>
-        <button class="mini" id="editcancel">Cancel</button>
+        <button class="mini primary" id="editsave" data-i18n="save">Save</button>
+        <button class="mini" id="editcancel" data-i18n="cancel">Cancel</button>
         <div id="edithelp"></div>
       </div>
     </div>
     <div id="telemetry">
-      <div><div class="k">Battery</div><div class="v" id="volt">—</div></div>
-      <div><div class="k">Position</div><div class="v" id="pos">—</div></div>
-      <div><div class="k">Doing</div><div class="v" id="state">—</div></div>
+      <div><div class="k" data-i18n="battery">Battery</div><div class="v" id="volt">—</div></div>
+      <div><div class="k" data-i18n="position">Position</div><div class="v" id="pos">—</div></div>
+      <div><div class="k" data-i18n="doing">Doing</div><div class="v" id="state">—</div></div>
     </div>
     <div id="card">
       <div id="cv"></div>
       <div id="cw"></div>
-      <button id="go">Confirm</button>
-      <button id="no">Cancel</button>
+      <button id="go" data-i18n="confirm">Confirm</button>
+      <button id="no" data-i18n="cancel">Cancel</button>
     </div>
-    <div id="estop-bar"><button id="estop">Stop the robot</button></div>
+    <div id="estop-bar"><button id="estop" data-i18n="estop">Stop the robot</button></div>
   </div>
 
   <div class="col">
-    <h2>Safety log</h2>
+    <h2 data-i18n="safety_log">Safety log</h2>
     <div id="log">
       <div class="empty" id="log-empty">
-        <p>Every decision the gate makes lands here, newest first — what was asked, what it allowed, and what it refused.</p>
+        <p data-i18n="log_intro">Every decision the gate makes lands here, newest first — what was asked, what it allowed, and what it refused.</p>
       </div>
     </div>
   </div>
@@ -373,6 +373,116 @@ const cv = $("map"), cx = cv.getContext("2d");
 let T = { s: 60, ox: 0, oy: 0 };
 const ROBOT_R = 0.10;           // metres, matches the Nav2 footprint
 
+/* ---------- language ----------
+   ROBOT_LANG on the server picks it; /api/llm reports it. Everything the
+   panel itself says is here. What the robot says comes from the server. */
+const I18N = {
+  en: {
+    tagline: "voice control with a safety gate", robot_link: "Robot link",
+    conversation: "Conversation",
+    chat_intro: "Hold the button below and speak to the robot. Nothing moves until you confirm it.",
+    try: "Try:", try1: "Where are you right now?", try2: "Drive to the living room", try3: "Why did you stop?",
+    hold: "Hold to speak", type: "or type instead", listening: "Listening",
+    no_mic: "No microphone here — type below", lost_conn: "Connection lost",
+    map: "Map", newmap: "New map…", fit: "Fit", edit: "Edit map", recheck: "Check again",
+    move: "Move", place: "Place", zone: "Zone", delete: "Delete", placehere: "Place at robot",
+    save: "Save", cancel: "Cancel", confirm: "Confirm", estop: "Stop the robot",
+    battery: "Battery", position: "Position", doing: "Doing",
+    lost: "lost", driving: "driving", stopped: "stopped",
+    safety_log: "Safety log",
+    log_intro: "Every decision the gate makes lands here, newest first — what was asked, what it allowed, and what it refused.",
+    t_sitepick: "Switch site", t_newmap: "Load a map saved by map_saver (.yaml + .pgm)",
+    t_fit: "Show the whole room again (or double-click the map)",
+    t_recheck: "Read the robot's map again and compare",
+    t_move: "Drag places and zone corners", t_place: "Click to add a named place",
+    t_zone: "Click corners; click the first corner or press Enter to close",
+    t_delete: "Click a place or zone to remove it", t_placehere: "Add a place exactly where the robot is now",
+    grid: "1 m grid", grid_nomap: "no map for this site", grid_map: "occupancy map",
+    grid_nav: "scroll to zoom, drag to pan", no_entry: "No entry: ",
+    h_move: "Drag a place or a zone corner to move it, or empty floor to pan. Scroll to zoom.",
+    h_place: "Click where the robot should be able to go, then name the place.",
+    h_zone: "Click the corners of a forbidden area. Click the first corner again or press Enter to close it; Esc to undo.",
+    h_delete: "Click a place or inside a zone to remove it.",
+    name_place: "Name of the place:", name_zone: "Name of the zone:", name_site: "Name of the new site:",
+    name_hint: "the ",
+    dup_place: "There is already a place called “{0}”.", dup_zone: "There is already a zone called “{0}”.",
+    zone_short: "A zone needs at least three corners.",
+    saving: "Saving…", no_answer: "The server did not answer.", save_failed: "Saving failed.",
+    robot_lost: "The robot does not know where it is, so there is no position to use.",
+    added_at: "Added “{0}” at the robot: {1}, {2}. Save to keep it.",
+    mc_mismatch: "Different map on the robot — every trip is refused. ",
+    mc_unverified: "⚠ ", mc_match: "✓ the robot is using this map",
+    switch_failed: "Could not switch.", pick_both: "Select both files map_saver wrote: the .yaml and the .pgm.",
+    load_failed: "The map could not be loaded.",
+    you: "You", robot: "Robot", host_error: "host error: ",
+    cleared: "Cleared to go", cleared_half: "Cleared, at half speed",
+    say_yes: "Yes, go ahead.", say_no: "No, cancel that.", say_stop: "Stop.",
+  },
+  cs: {
+    tagline: "hlasové ovládání s bezpečnostní bránou", robot_link: "Spojení s robotem",
+    conversation: "Konverzace",
+    chat_intro: "Podrž tlačítko dole a mluv na robota. Nic se nepohne, dokud to nepotvrdíš.",
+    try: "Zkus:", try1: "Kde právě jsi?", try2: "Jeď do obýváku", try3: "Proč jsi zastavil?",
+    hold: "Podrž a mluv", type: "nebo napiš", listening: "Poslouchám",
+    no_mic: "Tady není mikrofon — napiš to dole", lost_conn: "Spojení ztraceno",
+    map: "Mapa", newmap: "Nová mapa…", fit: "Celá mapa", edit: "Upravit mapu", recheck: "Zkontrolovat znovu",
+    move: "Posun", place: "Místo", zone: "Zóna", delete: "Smazat", placehere: "Místo u robota",
+    save: "Uložit", cancel: "Zrušit", confirm: "Potvrdit", estop: "Zastavit robota",
+    battery: "Baterie", position: "Poloha", doing: "Stav",
+    lost: "ztracen", driving: "jede", stopped: "stojí",
+    safety_log: "Bezpečnostní záznam",
+    log_intro: "Sem se zapisuje každé rozhodnutí brány, nejnovější nahoře — co se žádalo, co povolila a co odmítla.",
+    t_sitepick: "Přepnout lokaci", t_newmap: "Nahrát mapu uloženou přes map_saver (.yaml + .pgm)",
+    t_fit: "Ukázat znovu celou místnost (nebo dvojklik do mapy)",
+    t_recheck: "Znovu načíst mapu z robota a porovnat",
+    t_move: "Táhni místa a rohy zón", t_place: "Kliknutím přidáš pojmenované místo",
+    t_zone: "Klikej rohy; zónu uzavřeš kliknutím na první roh nebo Enterem",
+    t_delete: "Kliknutím smažeš místo nebo zónu", t_placehere: "Přidat místo přesně tam, kde teď stojí robot",
+    grid: "mřížka 1 m", grid_nomap: "tahle lokace nemá mapu", grid_map: "mapa obsazenosti",
+    grid_nav: "kolečkem přiblížíš, tažením posuneš", no_entry: "Zákaz vjezdu: ",
+    h_move: "Táhni místo nebo roh zóny, prázdnou plochou posuneš mapu. Kolečkem přiblížíš.",
+    h_place: "Klikni tam, kam má robot umět dojet, a místo pojmenuj.",
+    h_zone: "Klikej rohy zakázané oblasti. Zónu uzavřeš kliknutím na první roh nebo Enterem; Esc vrátí poslední roh.",
+    h_delete: "Klikni na místo nebo dovnitř zóny a smažeš je.",
+    name_place: "Jméno místa:", name_zone: "Jméno zóny:", name_site: "Jméno nové lokace:",
+    name_hint: "",
+    dup_place: "Místo „{0}“ už existuje.", dup_zone: "Zóna „{0}“ už existuje.",
+    zone_short: "Zóna potřebuje aspoň tři rohy.",
+    saving: "Ukládám…", no_answer: "Server neodpověděl.", save_failed: "Uložení se nepovedlo.",
+    robot_lost: "Robot neví, kde je, takže není jakou polohu použít.",
+    added_at: "Přidáno „{0}“ u robota: {1}; {2}. Ulož, ať to zůstane.",
+    mc_mismatch: "Robot má jinou mapu — každá jízda bude odmítnuta. ",
+    mc_unverified: "⚠ ", mc_match: "✓ robot používá tuhle mapu",
+    switch_failed: "Přepnutí se nepovedlo.", pick_both: "Vyber oba soubory z map_saver: .yaml i .pgm.",
+    load_failed: "Mapu se nepodařilo nahrát.",
+    you: "Ty", robot: "Robot", host_error: "chyba hostitele: ",
+    cleared: "Povoleno", cleared_half: "Povoleno, poloviční rychlostí",
+    say_yes: "Ano, jeď.", say_no: "Ne, zruš to.", say_stop: "Stop.",
+  },
+};
+let LANG = "en";
+function L(key, ...args) {
+  const text = (I18N[LANG] && I18N[LANG][key]) ?? I18N.en[key] ?? key;
+  return text.replace(/\{(\d)\}/g, (_, i) => args[+i]);
+}
+const fmt = (v, d) => LANG === "cs" ? v.toFixed(d).replace(".", ",") : v.toFixed(d);
+function applyLang(code) {
+  LANG = I18N[code] ? code : "en";
+  document.documentElement.lang = LANG;
+  document.querySelectorAll("[data-i18n]").forEach(e => e.textContent = L(e.dataset.i18n));
+  document.querySelectorAll("[data-i18n-title]").forEach(e => e.title = L(e.dataset.i18nTitle));
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(e => e.placeholder = L(e.dataset.i18nPlaceholder));
+  if (typeof rec !== "undefined" && rec) rec.lang = LANG === "cs" ? "cs-CZ" : "en-US";
+  if (editing) help(HELP()[tool]);
+  if (siteData) showGridHint();
+  draw();
+}
+// What the robot's answers mean, in either language. The panel colours the
+// safety log and shows the confirmation card from these.
+const STOP_RE = /cannot|off limits|too tight|does not know|no longer valid|staying put|nemůžu|nesmím|neprotáhnu|neví, kde|neplatí|zůstávám stát/i;
+const LIMIT_RE = /half speed|slowly|poloviční rychlostí|pomalu/i;
+const TOKEN_RE = /token(?:em)? ([A-Za-z0-9_-]+)/;
+
 /* The occupancy grid of the current site, from its map.yaml and map.pgm on
    the server. Walls and floor are drawn as a backdrop so the named places
    and the forbidden zones sit in the real room rather than in an empty
@@ -385,6 +495,13 @@ const mapImg = new Image();
 let mapReady = false;
 mapImg.onload = () => { mapReady = true; fit(); draw(); };
 
+function showGridHint() {
+  $("maphint").innerHTML = MAP
+    ? L("grid") + " &nbsp;·&nbsp; " + L("grid_map") + ", " + fmt(MAP.res, 2)
+      + " m/px &nbsp;·&nbsp; " + L("grid_nav")
+    : L("grid") + " &nbsp;·&nbsp; " + L("grid_nomap");
+}
+
 async function loadSite() {
   const site = await (await fetch("/api/operator/site")).json();
   siteData = site;
@@ -395,14 +512,13 @@ async function loadSite() {
   mapReady = false;
   if (!m) {
     MAP = null;
-    $("maphint").innerHTML = "1 m grid &nbsp;·&nbsp; no map for this site";
+    showGridHint();
     return;
   }
   MAP = { res: m.resolution, origin: m.origin, size: m.size, extent: m.extent };
   MAP.x1 = MAP.origin[0] + MAP.size[0] * MAP.res;
   MAP.y1 = MAP.origin[1] + MAP.size[1] * MAP.res;
-  $("maphint").innerHTML = "1 m grid &nbsp;·&nbsp; occupancy map, "
-    + MAP.res.toFixed(2) + " m/px &nbsp;·&nbsp; scroll to zoom, drag to pan";
+  showGridHint();
   mapImg.src = "/api/operator/map.png?r=" + site.revision;
 }
 
@@ -494,7 +610,7 @@ function draw() {
       { x: 0, y: 0 }
     );
     const [a, b] = px(c);
-    const label = "No entry: " + z.name.replace(/^the /, "");
+    const label = L("no_entry") + z.name.replace(/^the /, "");
     cx.font = "500 12px 'IBM Plex Sans', sans-serif";
     cx.textAlign = "center";
     // The stripes are busy and the map underneath is busier. Without a
@@ -594,18 +710,15 @@ function help(text, err) {
   h.className = err ? "err" : "";
 }
 
-const HELP = {
-  move: "Drag a place or a zone corner to move it, or empty floor to pan. Scroll to zoom.",
-  place: "Click where the robot should be able to go, then name the place.",
-  zone: "Click the corners of a forbidden area. Click the first corner again or press Enter to close it; Esc to undo.",
-  delete: "Click a place or inside a zone to remove it.",
-};
+const HELP = () => ({
+  move: L("h_move"), place: L("h_place"), zone: L("h_zone"), delete: L("h_delete"),
+});
 
 function setTool(t) {
   tool = t; pending = [];
   document.querySelectorAll("#editbar .tool").forEach(b => b.classList.toggle("on", b.dataset.tool === t));
   $("mapwrap").className = "map-wrap editing tool-" + t;
-  help(HELP[t]);
+  help(HELP()[t]);
   draw();
 }
 
@@ -632,11 +745,11 @@ function stopEditing() {
 function askName(what, suggestion) {
   const taken = new Set([...draft.places, ...draft.zones].map(i => i.name.toLowerCase()));
   for (;;) {
-    const name = (prompt("Name of the " + what + ":", suggestion || "") || "").trim();
+    const name = (prompt(L("name_" + what), suggestion || "") || "").trim();
     if (!name) return null;
     const list = what === "place" ? draft.places : draft.zones;
     if (list.some(i => i.name.toLowerCase() === name.toLowerCase())) {
-      alert("There is already a " + what + " called “" + name + "”.");
+      alert(L("dup_" + what, name));
       continue;
     }
     return name;
@@ -644,11 +757,11 @@ function askName(what, suggestion) {
 }
 
 function closeZone() {
-  if (pending.length < 3) { help("A zone needs at least three corners.", true); return; }
-  const name = askName("zone", "the ");
+  if (pending.length < 3) { help(L("zone_short"), true); return; }
+  const name = askName("zone", L("name_hint"));
   if (name) draft.zones.push({ name, polygon: pending.slice() });
   pending = [];
-  help(HELP.zone);
+  help(HELP().zone);
   draw();
 }
 
@@ -664,7 +777,7 @@ cv.addEventListener("mousedown", e => {
     const i = draft.places.findIndex(p => near(p, mx, my));
     if (i >= 0) dragging = { kind: "place", i };
   } else if (tool === "place") {
-    const name = askName("place", "the ");
+    const name = askName("place", L("name_hint"));
     if (name) draft.places.push({ name, x: w.x, y: w.y });
     draw();
   } else if (tool === "zone") {
@@ -767,12 +880,12 @@ async function saveEdits() {
       polygon: z.polygon.map(p => [+p.x.toFixed(3), +p.y.toFixed(3)]),
     })),
   };
-  help("Saving…");
+  help(L("saving"));
   const res = await fetch("/api/operator/site", {
     method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
   });
-  const out = await res.json().catch(() => ({ error: "The server did not answer." }));
-  if (!res.ok) { help(out.error || "Saving failed.", true); return; }
+  const out = await res.json().catch(() => ({ error: L("no_answer") }));
+  if (!res.ok) { help(out.error || L("save_failed"), true); return; }
   stopEditing();
   await loadSite();
   refresh();
@@ -782,26 +895,24 @@ async function saveEdits() {
 // right coordinates, and a spot the robot has demonstrably reached.
 $("placehere").onclick = () => {
   const r = scene && scene.robot;
-  if (!r || !r.localized) { help("The robot does not know where it is, so there is no position to use.", true); return; }
-  const name = askName("place", "the ");
+  if (!r || !r.localized) { help(L("robot_lost"), true); return; }
+  const name = askName("place", L("name_hint"));
   if (!name) return;
   draft.places.push({ name, x: r.x, y: r.y });
-  help("Added “" + name + "” at the robot: " + r.x.toFixed(2) + ", " + r.y.toFixed(2) + ". Save to keep it.");
+  help(L("added_at", name, fmt(r.x, 2), fmt(r.y, 2)));
   draw();
 };
 
 /* Is the robot localising against the map these zones are drawn on? */
-const MAPCHECK = {
-  mismatch: "Different map on the robot — every trip is refused. ",
-  unverified: "⚠ ",
-  match: "✓ the robot is using this map",
-};
+const MAPCHECK = () => ({
+  mismatch: L("mc_mismatch"), unverified: L("mc_unverified"), match: L("mc_match"),
+});
 function showMapCheck(c) {
   const box = $("mapcheck");
   if (!c || c.status === "simulated" || c.status === "unknown") { box.classList.add("hidden"); return; }
   box.className = c.status;
   box.querySelector(".txt").textContent =
-    MAPCHECK[c.status] + (c.status === "match" ? "" : c.detail);
+    MAPCHECK()[c.status] + (c.status === "match" ? "" : c.detail);
 }
 $("recheck").onclick = async () => {
   showMapCheck(await (await fetch("/api/operator/check-map", { method: "POST" })).json());
@@ -834,7 +945,7 @@ $("sitepick").onchange = async e => {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ folder: e.target.value }),
   });
-  if (!res.ok) alert((await res.json()).error || "Could not switch.");
+  if (!res.ok) alert((await res.json()).error || L("switch_failed"));
   await loadSite(); refresh();
 };
 
@@ -844,8 +955,8 @@ $("mapfiles").onchange = async e => {
   e.target.value = "";
   const yaml = files.find(f => /\.ya?ml$/i.test(f.name));
   const pgm = files.find(f => /\.pgm$/i.test(f.name));
-  if (!yaml || !pgm) { alert("Select both files map_saver wrote: the .yaml and the .pgm."); return; }
-  const name = (prompt("Name of the new site:", yaml.name.replace(/\.ya?ml$/i, "")) || "").trim();
+  if (!yaml || !pgm) { alert(L("pick_both")); return; }
+  const name = (prompt(L("name_site"), yaml.name.replace(/\.ya?ml$/i, "")) || "").trim();
   if (!name) return;
   const bytes = new Uint8Array(await pgm.arrayBuffer());
   let bin = "";
@@ -855,12 +966,12 @@ $("mapfiles").onchange = async e => {
     body: JSON.stringify({ name, yaml: await yaml.text(), pgm_base64: btoa(bin) }),
   });
   const out = await res.json().catch(() => ({}));
-  if (!res.ok) { alert(out.error || "The map could not be loaded."); return; }
+  if (!res.ok) { alert(out.error || L("load_failed")); return; }
   await loadSite(); refresh();
 };
 
 fetch("/api/llm").then(r => r.json())
-  .then(m => { $("llm").textContent = m.label; })
+  .then(m => { $("llm").textContent = m.label; applyLang(m.lang || "en"); })
   .catch(() => {});
 
 async function refresh() {
@@ -874,12 +985,12 @@ async function refresh() {
 
     const v = scene.robot.voltage;
     const volt = $("volt");
-    volt.textContent = v.toFixed(1) + " V";
+    volt.textContent = fmt(v, 1) + " V";
     volt.className = "v" + (v < 10.8 ? " bad" : v < 11.4 ? " warn" : "");
 
-    $("pos").textContent = scene.robot.x.toFixed(1) + ", " + scene.robot.y.toFixed(1);
-    $("state").textContent = !scene.robot.localized ? "lost"
-      : scene.robot.moving ? "driving" : "stopped";
+    $("pos").textContent = fmt(scene.robot.x, 1) + (LANG === "cs" ? "; " : ", ") + fmt(scene.robot.y, 1);
+    $("state").textContent = !scene.robot.localized ? L("lost")
+      : scene.robot.moving ? L("driving") : L("stopped");
 
     fit();
     draw();
@@ -909,7 +1020,7 @@ function logline(level, text) {
   d.className = "entry " + level;
   const t = document.createElement("span");
   t.className = "t";
-  t.textContent = new Date().toLocaleTimeString("en-GB");
+  t.textContent = new Date().toLocaleTimeString(LANG === "cs" ? "cs-CZ" : "en-GB");
   d.append(t, document.createTextNode(text));
   $("log").prepend(d);
 }
@@ -918,17 +1029,17 @@ function logline(level, text) {
 const ws = new WebSocket(`ws://${location.host}/ws`);
 ws.onopen  = () => { $("led-mcp").className = "led on"; $("mic").disabled = false; };
 ws.onclose = () => { $("led-mcp").className = "led off"; $("mic").disabled = true;
-                     $("miclabel").textContent = "Connection lost"; };
+                     $("miclabel").textContent = L("lost_conn"); };
 
-function send(t) { bubble("You", t, true); ws.send(t); }
+function send(t) { bubble(L("you"), t, true); ws.send(t); }
 
 ws.onmessage = ev => {
   const m = JSON.parse(ev.data);
 
   if (m.type === "say") {
-    bubble("Robot", m.text);
+    bubble(L("robot"), m.text);
     speak(m.text);
-    if (/cannot make that trip|staying put/i.test(m.text)) hideCard();
+    if (STOP_RE.test(m.text)) hideCard();
   }
 
   if (m.type === "tool_call") {
@@ -936,19 +1047,16 @@ ws.onmessage = ev => {
   }
 
   if (m.type === "tool_result") {
-    const level =
-      /cannot|off limits|too tight|does not know|no longer valid|staying put/i.test(m.text) ? "STOP"
-      : /half speed|slowly/i.test(m.text) ? "LIMIT"
-      : "ALLOW";
+    const level = STOP_RE.test(m.text) ? "STOP" : LIMIT_RE.test(m.text) ? "LIMIT" : "ALLOW";
     logline(level, m.text);
 
-    const tok = m.text.match(/token ([A-Za-z0-9_-]+)/);
+    const tok = m.text.match(TOKEN_RE);
     if (tok) { pendingToken = tok[1]; showCard(m.text); }
     if (level === "STOP") markStop(m.text);
     refresh();
   }
 
-  if (m.type === "error") logline("STOP", "host error: " + m.text);
+  if (m.type === "error") logline("STOP", L("host_error") + m.text);
 };
 
 function markStop(text) {
@@ -966,23 +1074,23 @@ function markStop(text) {
 
 /* ---------- confirmation ---------- */
 function showCard(text) {
-  const limit = /half speed|slowly/i.test(text);
+  const limit = LIMIT_RE.test(text);
   $("card").className = "show " + (limit ? "limit" : "allow");
-  $("cv").textContent = limit ? "Cleared, at half speed" : "Cleared to go";
+  $("cv").textContent = limit ? L("cleared_half") : L("cleared");
   // Deliberately no autofocus: a focused Confirm button turns a stray
   // Enter keypress into a moving robot. Confirmation is always explicit.
-  $("cw").textContent = text.replace(/\s*Confirm with token.*$/, "");
+  $("cw").textContent = text.replace(/\s*(Confirm with token|Potvrď to tokenem).*$/, "");
 }
 function hideCard() { $("card").className = ""; pendingToken = null; }
 
-$("go").onclick    = () => { send("Yes, go ahead."); hideCard(); };
-$("no").onclick    = () => { send("No, cancel that."); hideCard(); };
-$("estop").onclick = () => { send("Stop."); hideCard(); };
+$("go").onclick    = () => { send(L("say_yes")); hideCard(); };
+$("no").onclick    = () => { send(L("say_no")); hideCard(); };
+$("estop").onclick = () => { send(L("say_stop")); hideCard(); };
 
 /* ---------- speech ---------- */
 function speak(t) {
   const u = new SpeechSynthesisUtterance(t);
-  u.lang = "en-US"; u.rate = 1.05;
+  u.lang = LANG === "cs" ? "cs-CZ" : "en-US"; u.rate = 1.05;
   speechSynthesis.speak(u);
 }
 
@@ -990,13 +1098,13 @@ const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null;
 if (SR) {
   rec = new SR();
-  rec.lang = "en-US";
+  rec.lang = LANG === "cs" ? "cs-CZ" : "en-US";
   rec.interimResults = false;
   rec.onresult = e => send(e.results[0][0].transcript);
-  rec.onend = () => { $("mic").className = ""; $("miclabel").textContent = "Hold to speak"; };
-  rec.onerror = () => { $("mic").className = ""; $("miclabel").textContent = "Hold to speak"; };
+  rec.onend = () => { $("mic").className = ""; $("miclabel").textContent = L("hold"); };
+  rec.onerror = () => { $("mic").className = ""; $("miclabel").textContent = L("hold"); };
 } else {
-  $("miclabel").textContent = "No microphone here — type below";
+  $("miclabel").textContent = L("no_mic");
   $("mic").disabled = true;
 }
 
@@ -1006,7 +1114,7 @@ $("mic").onclick = () => {
   speechSynthesis.cancel();
   rec.start();
   $("mic").className = "on";
-  $("miclabel").textContent = "Listening";
+  $("miclabel").textContent = L("listening");
 };
 
 $("text").onkeydown = e => {

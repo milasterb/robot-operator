@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 from gate.types import MoveProposal, Verdict
 
+from i18n import t
+
 TOKEN_LIFETIME = 30.0  # seconds
 
 
@@ -52,10 +54,7 @@ class TokenStore:
 
         pending = self._pending.pop(token, None)
         if pending is None:
-            raise TokenError(
-                "That confirmation is no longer valid. Ask me again and I will "
-                "work out a fresh route."
-            )
+            raise TokenError(t("token.invalid"))
         return pending
 
     def discard_all(self) -> None:

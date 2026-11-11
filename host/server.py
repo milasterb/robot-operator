@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
+from i18n import language
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -27,7 +28,7 @@ async def lifespan(app: FastAPI):
     await agent.start()
     print(f"Connected to {agent.mcp.server_info.get('name')} "
           f"with {len(agent.tools)} tools")
-    print(f"Language model: {agent.llm.label}")
+    print(f"Language model: {agent.llm.label}, speaking {language()}")
     yield
     await mcp.aclose()
 
@@ -60,7 +61,7 @@ async def operator(path: str, request: Request) -> Response:
 @app.get("/api/llm")
 async def llm() -> dict:
     """Which model is answering, for the panel's status strip."""
-    return {"label": agent.llm.label}
+    return {"label": agent.llm.label, "lang": language()}
 
 
 @app.websocket("/ws")

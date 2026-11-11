@@ -261,6 +261,29 @@ does not know there is a model at all. With Ollama the temperature is 0.0 —
 not because it makes the robot safe (it does not, which is the whole argument
 above) but because a demo that behaves the same twice is easier to trust.
 
+### Language: English or Czech
+
+```bash
+ROBOT_LANG=cs        # in .env, or in front of both commands; default en
+```
+
+Both processes read it: `server.py` for what the tools and the gate say,
+`host.server` for the system prompt and the panel. Restart both after
+changing it. Every sentence about safety is a fixed template in `i18n.py` —
+the model reads the gate's reasons out, it does not translate them, so a
+refusal says exactly the same thing whichever model is answering. Czech uses
+a decimal comma and quotes place names („kuchyň“); spoken names are matched
+without diacritics, so *kuchyne* finds *kuchyň*. The panel takes the language
+from the host, including the speech recogniser and the voice (`cs-CZ`), which
+needs a Czech voice installed in the browser or the OS.
+
+The language changes only words. `tests/test_i18n.py` checks that the gate
+reaches the same verdicts in both, and that every message has the same blanks
+in both.
+
+The charger is the place named by `gate.charger`: *the charger* in English,
+*nabíječka* in Czech — give a Czech site a place with that name.
+
 ### Against the real robot
 
 On the robot, start the laser bring-up, Nav2, rosbridge and the plan relay
@@ -392,7 +415,8 @@ host/          MCP client, agent loop, model backends, FastAPI server, operator 
 layout/        sites: loading maps, checking places and zones, the change log
 sites/         one folder per room: map, places, forbidden zones
 patches/       the change to Yahboom's driver node
-tests/         gate and site tests
+tests/         gate, site and language tests
+i18n.py        every sentence, in English and Czech
 server.py      the MCP server and its eight tools
 FRICTION_LOG.md
 PRODUCT_FEEDBACK.md

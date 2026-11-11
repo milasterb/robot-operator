@@ -6,6 +6,7 @@ import dataclasses
 import json
 import os
 import time
+import unicodedata
 
 from mcp.server.mcpserver import MCPServer
 from starlette.requests import Request
@@ -14,6 +15,7 @@ from starlette.responses import JSONResponse, Response
 from gate.gate import Gate
 from gate.rules import GateConfig
 from gate.types import Level, Point
+from i18n import language, num, seconds_ago, t
 from layout import (
     Site, SiteError, compare_with_robot, create_site, list_sites, load_site, log_change,
     parse_site, save_site, site_folder,
@@ -39,7 +41,7 @@ else:
 # robot_width is the one number here that is not measured from the map.
 # Measure the X3 across its widest point, wheels included, before trusting
 # the clearance rules: they are both derived from it.
-gate = Gate(GateConfig(robot_width=0.20))
+gate = Gate(GateConfig(robot_width=0.20, charger_name=t("gate.charger")))
 tokens = TokenStore()
 
 
@@ -111,8 +113,7 @@ class SiteKeeper:
         the demo; the panel says the zones are unverified.
         """
         if isinstance(robot, FakeRobot):
-            self.map_check = {"status": "simulated",
-                              "detail": "Simulated robot: no robot map to compare."}
+            self.map_check = {"status": "simulated", "detail": t("map.simulated")}
             gate.config = dataclasses.replace(gate.config, map_mismatch=None)
             return self.map_check
 
@@ -124,15 +125,13 @@ class SiteKeeper:
                 self._robot_map = fetched
 
         if self._robot_map is None:
-            self.map_check = {"status": "unverified",
-                              "detail": "Could not read the map from the robot's "
-                                        "map_server, so the zones are not verified."}
+            self.map_check = {"status": "unverified", "detail": t("map.unverified")}
             mismatch = None
         else:
             mismatch = compare_with_robot(self.site.grid, self._robot_map)
             self.map_check = (
                 {"status": "mismatch", "detail": mismatch} if mismatch else
-                {"status": "match", "detail": "The robot is using this map."}
+                {"status": "match", "detail": t("map.match")}
             )
         if mismatch != gate.config.map_mismatch:
             print(f"Map check: {self.map_check['status']} {self.map_check['detail']}")
@@ -153,15 +152,20 @@ sites = SiteKeeper(site_folder(os.environ.get("SITE") or ("obyvak" if ROBOT_HOST
 mcp = MCPServer("robot-operator", version="0.4.0")
 
 
+def _fold(text: str) -> str:
+    """Lower case, no diacritics: 'Kuchyně' and 'kuchyne' are the same word."""
+    decomposed = unicodedata.normalize("NFKD", text.strip().lower())
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
 def _resolve(place: str) -> tuple[str, Point]:
     """Match a spoken place name against the map. Raises ValueError."""
     places = sites.current().places
-    needle = place.strip().lower()
+    needle = _fold(place)
     for name, point in places.items():
-        if needle in name.lower() or name.lower() in needle:
+        if needle in _fold(name) or _fold(name) in needle:
             return name, point
-    known = ", ".join(places)
-    raise ValueError(f"I do not know a place called {place}. I know: {known}.")
+    raise ValueError(t("tool.unknown_place", place=place, known=", ".join(places)))
 
 
 @mcp.tool()
@@ -169,19 +173,21 @@ def get_status() -> str:
     """Report the robot's battery, position and what it is doing right now."""
     s = robot.get_state()
     if not s.localized:
-        return "The robot is powered up but does not know where it is."
-    doing = "driving" if s.moving else "stopped"
-    return (
-        f"Battery {s.voltage:.1f} volts. The robot is {doing} at "
-        f"{s.pose.x:.1f}, {s.pose.y:.1f} metres. Nearest obstacle "
-        f"{s.nearest_obstacle:.1f} metres."
+        return t("tool.status_lost")
+    return t(
+        "tool.status", v=num(s.voltage),
+        doing=t("tool.driving_now" if s.moving else "tool.stopped_now"),
+        x=num(s.pose.x), y=num(s.pose.y), d=num(s.nearest_obstacle),
     )
 
 
 @mcp.tool()
 def list_places() -> str:
     """List the places the robot can be sent to."""
-    return "I can drive to: " + ", ".join(sites.current().places) + "."
+    places = sites.current().places
+    if not places:
+        return t("tool.no_places")
+    return t("tool.places", places=", ".join(places))
 
 
 @mcp.tool()
@@ -204,7 +210,7 @@ def propose_move(place: str) -> str:
     if verdict.level is Level.STOP:
         gate.commit(verdict, proposal)
         robot.set_light(LightLevel.STOP)
-        return "I cannot make that trip. " + " ".join(verdict.reasons)
+        return t("tool.refuse", reasons=" ".join(verdict.reasons))
 
     pending = tokens.issue(proposal, verdict, state.voltage)
     # Amber, breathing: proposed, and waiting on a human. Not green — nothing
@@ -212,10 +218,7 @@ def propose_move(place: str) -> str:
     robot.set_light(LightLevel.WAITING)
 
     warning = (" " + " ".join(verdict.reasons)) if verdict.level is Level.LIMIT else ""
-    return (
-        f"I can drive to {name}.{warning} Confirm with token {pending.token} "
-        f"within 30 seconds."
-    )
+    return t("tool.offer", name=name, warning=warning, token=pending.token)
 
 
 @mcp.tool()
@@ -236,20 +239,17 @@ def confirm_move(token: str) -> str:
 
     if verdict.level is Level.STOP:
         robot.set_light(LightLevel.STOP)
-        return (
-            "Something changed while we were talking, so I am staying put. "
-            + " ".join(verdict.reasons)
-        )
+        return t("tool.changed", reasons=" ".join(verdict.reasons))
 
     robot.drive(pending.proposal, verdict.speed_factor)
     robot.set_light(
         LightLevel.LIMIT if verdict.speed_factor < 1.0 else LightLevel.ALLOW
     )
 
-    name = pending.proposal.goal_name or "the destination"
+    name = pending.proposal.goal_name or t("tool.destination")
     if verdict.speed_factor < 1.0:
-        return f"Driving to {name} at half speed."
-    return f"Driving to {name}."
+        return t("tool.driving_half", name=name)
+    return t("tool.driving", name=name)
 
 
 @mcp.tool()
@@ -258,7 +258,7 @@ def stop() -> str:
     robot.halt()
     tokens.discard_all()
     robot.set_light(LightLevel.STOP)
-    return "Stopped."
+    return t("tool.stopped")
 
 
 @mcp.tool()
@@ -266,10 +266,11 @@ def explain_stop() -> str:
     """Say why the robot last refused to move or stopped."""
     entry = gate.last_stop()
     if entry is None:
-        return "I have not stopped for anything since we started."
-    ago = time.monotonic() - entry.timestamp
-    where = f" on the way to {entry.goal_name}" if entry.goal_name else ""
-    return f"About {ago:.0f} seconds ago{where}: " + " ".join(entry.reasons)
+        return t("tool.no_stop_yet")
+    ago = round(time.monotonic() - entry.timestamp)
+    where = t("tool.last_stop_where", name=entry.goal_name) if entry.goal_name else ""
+    return t("tool.last_stop", ago=seconds_ago(ago), where=where,
+             reasons=" ".join(entry.reasons))
 
 
 @mcp.tool()
@@ -277,7 +278,7 @@ def recent_events(count: int = 5) -> str:
     """List the robot's most recent safety decisions, newest first."""
     entries = list(gate.log)[-count:][::-1]
     if not entries:
-        return "Nothing has happened yet."
+        return t("tool.nothing_yet")
     lines = [f"{e.level.name}: " + " ".join(e.reasons) for e in entries]
     return " | ".join(lines)
 
@@ -339,13 +340,12 @@ async def operator_save(request: Request) -> JSONResponse:
     try:
         body = await request.json()
     except json.JSONDecodeError:
-        return _error("The request was not JSON.")
+        return _error(t("op.not_json"))
     if not isinstance(body, dict):
-        return _error("The request must be a JSON object.")
+        return _error(t("op.not_object"))
     current = sites.current()
     if body.get("revision") != sites.revision:
-        return _error("The map changed while you were editing. Reload it and "
-                      "draw your change again.", status=409)
+        return _error(t("op.conflict"), status=409)
     data = current.to_json()
     data["places"] = body.get("places", [])
     data["zones"] = body.get("zones", [])
@@ -385,14 +385,13 @@ async def operator_sites(request: Request) -> JSONResponse:
 async def operator_new_site(request: Request) -> JSONResponse:
     """Create a site from a map saved by map_saver, and switch to it."""
     if ROBOT_HOST:
-        return _error("With a real robot connected, start the server with "
-                      "SITE=... instead of switching maps here.", status=403)
+        return _error(t("op.real_robot"), status=403)
     try:
         body = await request.json()
         pgm = base64.b64decode(body["pgm_base64"], validate=True)
         target = create_site(str(body["name"]), str(body["yaml"]), pgm)
     except (json.JSONDecodeError, KeyError, TypeError, binascii.Error):
-        return _error("Send the map's name, its .yaml text and its .pgm file.")
+        return _error(t("op.send_map"))
     except SiteError as e:
         return _error(str(e))
     sites.switch(target)
@@ -403,13 +402,12 @@ async def operator_new_site(request: Request) -> JSONResponse:
 @mcp.custom_route("/operator/active", methods=["POST"])
 async def operator_switch(request: Request) -> JSONResponse:
     if ROBOT_HOST:
-        return _error("With a real robot connected, start the server with "
-                      "SITE=... instead of switching maps here.", status=403)
+        return _error(t("op.real_robot"), status=403)
     try:
         folder = site_folder(str((await request.json())["folder"]))
         sites.switch(folder)
     except (json.JSONDecodeError, KeyError, TypeError):
-        return _error("Say which site to switch to.")
+        return _error(t("op.which_site"))
     except SiteError as e:
         return _error(str(e))
     return await operator_site(request)

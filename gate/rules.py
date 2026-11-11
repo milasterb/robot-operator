@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from .types import Level, MoveProposal, Point, RobotState, Verdict
+from i18n import num, t
 
 @dataclass(frozen=True)
 class Zone:
@@ -56,7 +57,7 @@ def check_state_age(
     if age > cfg.max_state_age:
         return Verdict(
             Level.STOP,
-            [f"I have not heard from the robot for {age:.1f} seconds."],
+            [t("gate.state_age", age=num(age))],
             0.0,
         )
     return None
@@ -69,7 +70,7 @@ def check_localization(
     if not state.localized:
         return Verdict(
             Level.STOP,
-            ["The robot does not know where it is on the map."],
+            [t("gate.lost")],
             0.0,
         )
     return None
@@ -82,9 +83,7 @@ def check_map(
     if cfg.map_mismatch:
         return Verdict(
             Level.STOP,
-            ["The robot is using a different map from the one its forbidden "
-             f"zones were drawn on, so I cannot tell where they are. "
-             f"{cfg.map_mismatch}"],
+            [t("gate.map", detail=cfg.map_mismatch)],
             0.0,
         )
     return None
@@ -108,20 +107,18 @@ def check_battery(
         if heading_to_charger:
             return Verdict(
                 Level.LIMIT,
-                [f"Battery is low at {v:.1f} volts, so I will drive to the "
-                 f"charger slowly."],
+                [t("gate.battery_to_charger", v=num(v))],
                 0.5,
             )
         return Verdict(
             Level.STOP,
-            [f"Battery is down to {v:.1f} volts. The only trip I can make is "
-             f"to the charger."],
+            [t("gate.battery_stop", v=num(v))],
             0.0,
         )
     if v < limit_at:
         return Verdict(
             Level.LIMIT,
-            [f"Battery is at {v:.1f} volts, so I will drive at half speed."],
+            [t("gate.battery_limit", v=num(v))],
             0.5,
         )
     return None
@@ -134,7 +131,7 @@ def check_plan(
     if not proposal.path:
         return Verdict(
             Level.STOP,
-            ["I could not find a route to that place."],
+            [t("gate.no_route")],
             0.0,
         )
     return None
@@ -148,16 +145,14 @@ def check_zones(
         if point_in_polygon(proposal.goal, zone.polygon):
             return Verdict(
                 Level.STOP,
-                [f"That destination is inside {zone.name}, which is off "
-                 f"limits."],
+                [t("gate.zone_goal", zone=zone.name)],
                 0.0,
             )
         for p in proposal.path:
             if point_in_polygon(p, zone.polygon):
                 return Verdict(
                     Level.STOP,
-                    [f"The route passes through {zone.name}, which is off "
-                     f"limits."],
+                    [t("gate.zone_route", zone=zone.name)],
                     0.0,
                 )
     return None
@@ -171,15 +166,13 @@ def check_clearance(
     if c < cfg.robot_width * cfg.clearance_stop_ratio:
         return Verdict(
             Level.STOP,
-            [f"The narrowest point on the route is {c:.2f} metres, too tight "
-             f"for me to fit."],
+            [t("gate.too_tight", c=num(c, 2))],
             0.0,
         )
     if c < cfg.robot_width * cfg.clearance_limit_ratio:
         return Verdict(
             Level.LIMIT,
-            [f"The route narrows to {c:.2f} metres, so I will drive at half "
-             f"speed."],
+            [t("gate.narrow", c=num(c, 2))],
             0.5,
         )
     return None
@@ -192,8 +185,7 @@ def check_obstacle(
     if state.nearest_obstacle < cfg.obstacle_stop:
         return Verdict(
             Level.STOP,
-            [f"Something is {state.nearest_obstacle:.2f} metres away from me, "
-             f"too close to start moving."],
+            [t("gate.obstacle", d=num(state.nearest_obstacle, 2))],
             0.0,
         )
     return None

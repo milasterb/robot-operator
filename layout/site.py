@@ -39,6 +39,7 @@ from dotenv import load_dotenv
 
 from gate.rules import Zone
 from gate.types import Point
+from i18n import num, percent, t
 
 load_dotenv()
 
@@ -140,7 +141,7 @@ class Site:
     def map_png(self) -> bytes:
         """The backdrop image, rendered once per loaded site."""
         if self.grid is None:
-            raise SiteError("This site has no map.")
+            raise SiteError(t("site.no_map"))
         if self._png is None:
             self._png = self.grid.png()
         return self._png
@@ -173,7 +174,7 @@ def site_folder(name: str | None = None) -> Path:
     """The folder of the site called `name`, or of the one SITE names."""
     name = name or os.environ.get("SITE", "demo")
     if not name.replace("_", "").replace("-", "").isalnum():
-        raise SiteError(f"SITE must be a plain folder name, not {name!r}")
+        raise SiteError(t("site.bad_folder", name=name))
     return SITES_DIR / name
 
 
@@ -182,9 +183,9 @@ def load_site(folder: Path) -> Site:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError as e:
-        raise SiteError(f"No site at {folder} (missing site.json)") from e
+        raise SiteError(t("site.missing", folder=folder)) from e
     except json.JSONDecodeError as e:
-        raise SiteError(f"{path} is not valid JSON: {e}") from e
+        raise SiteError(t("site.bad_json", path=path, error=e)) from e
 
     map_file = data.get("map")
     grid = load_grid(folder / map_file) if map_file else None
@@ -198,60 +199,58 @@ def parse_site(data: dict, folder: Path, grid: GridMap | None) -> Site:
     drew it in the panel or someone edited the file by hand.
     """
     if not isinstance(data, dict):
-        raise SiteError("A site must be a JSON object.")
+        raise SiteError(t("site.not_object"))
     name = _name(data.get("name") or folder.name, "site")
 
     raw_places = data.get("places") or []
     raw_zones = data.get("zones") or []
     if not isinstance(raw_places, list) or not isinstance(raw_zones, list):
-        raise SiteError("places and zones must be lists.")
+        raise SiteError(t("site.not_lists"))
     if len(raw_places) > MAX_PLACES:
-        raise SiteError(f"At most {MAX_PLACES} places.")
+        raise SiteError(t("site.too_many_places", n=MAX_PLACES))
     if len(raw_zones) > MAX_ZONES:
-        raise SiteError(f"At most {MAX_ZONES} zones.")
+        raise SiteError(t("site.too_many_zones", n=MAX_ZONES))
 
     places: dict[str, Point] = {}
     for item in raw_places:
         if not isinstance(item, dict):
-            raise SiteError("Each place must be an object with name, x and y.")
+            raise SiteError(t("site.place_shape"))
         pname = _name(item.get("name"), "place")
         if pname.lower() in (n.lower() for n in places):
-            raise SiteError(f"Two places are called {pname!r}.")
-        point = _point(item.get("x"), item.get("y"), f"place {pname!r}")
-        _inside_map(point, grid, f"Place {pname!r}")
+            raise SiteError(t("site.place_twice", name=pname))
+        point = _point(item.get("x"), item.get("y"), t("site.where.place", name=pname))
+        _inside_map(point, grid, "place", pname)
         places[pname] = point
 
     zones: list[Zone] = []
     for item in raw_zones:
         if not isinstance(item, dict):
-            raise SiteError("Each zone must be an object with name and polygon.")
+            raise SiteError(t("site.zone_shape"))
         zname = _name(item.get("name"), "zone")
         if zname.lower() in (z.name.lower() for z in zones):
-            raise SiteError(f"Two zones are called {zname!r}.")
+            raise SiteError(t("site.zone_twice", name=zname))
         kind = item.get("kind", "forbidden")
         if kind not in ZONE_KINDS:
-            raise SiteError(f"Zone {zname!r} has unknown kind {kind!r}.")
+            raise SiteError(t("site.zone_kind", name=zname, kind=kind))
         polygon = item.get("polygon")
         if not isinstance(polygon, list) or not 3 <= len(polygon) <= MAX_VERTICES:
-            raise SiteError(
-                f"Zone {zname!r} needs between 3 and {MAX_VERTICES} corners.")
+            raise SiteError(t("site.zone_corners", name=zname, n=MAX_VERTICES))
         points = []
         for corner in polygon:
             if not isinstance(corner, (list, tuple)) or len(corner) != 2:
-                raise SiteError(f"Zone {zname!r} has a corner that is not [x, y].")
-            p = _point(corner[0], corner[1], f"zone {zname!r}")
-            _inside_map(p, grid, f"Zone {zname!r}")
+                raise SiteError(t("site.zone_corner_shape", name=zname))
+            p = _point(corner[0], corner[1], t("site.where.zone", name=zname))
+            _inside_map(p, grid, "zone", zname)
             points.append(p)
         if _self_intersects(points):
-            raise SiteError(
-                f"Zone {zname!r} crosses itself, so inside and outside are ambiguous.")
+            raise SiteError(t("site.zone_crosses", name=zname))
         if abs(_area(points)) < MIN_ZONE_AREA:
-            raise SiteError(f"Zone {zname!r} is too small to mean anything.")
+            raise SiteError(t("site.zone_small", name=zname))
         zones.append(Zone(zname, points))
 
     map_file = data.get("map")
     if map_file is not None and not isinstance(map_file, str):
-        raise SiteError("map must be the name of a .yaml file.")
+        raise SiteError(t("site.map_field"))
     return Site(name, folder, places, zones, map_file, grid)
 
 
@@ -286,7 +285,7 @@ def folder_name(display_name: str) -> str:
     slug = "".join(c if c.isalnum() else "-" for c in ascii_.lower())
     slug = "-".join(part for part in slug.split("-") if part)
     if not slug:
-        raise SiteError("The name needs at least one letter or digit.")
+        raise SiteError(t("site.slug"))
     return slug[:MAX_NAME]
 
 
@@ -301,7 +300,7 @@ def create_site(display_name: str, yaml_text: str, pgm: bytes) -> Path:
     name = _name(display_name, "site")
     target = SITES_DIR / folder_name(name)
     if target.exists():
-        raise SiteError(f"A site called {target.name!r} already exists.")
+        raise SiteError(t("site.exists", name=target.name))
 
     meta = _read_map_yaml(yaml_text)
     scratch = Path(tempfile.mkdtemp(prefix=".new-", dir=SITES_DIR))
@@ -310,7 +309,7 @@ def create_site(display_name: str, yaml_text: str, pgm: bytes) -> Path:
         (scratch / "map.yaml").write_text(_map_yaml(meta), encoding="utf-8")
         grid = load_grid(scratch / "map.yaml")
         if grid.extent() is None:
-            raise SiteError("That map is entirely unknown: nothing was surveyed.")
+            raise SiteError(t("site.unsurveyed"))
         site = Site(name, scratch, map_file="map.yaml", grid=grid)
         save_site(site)
         os.replace(scratch, target)
@@ -391,20 +390,20 @@ def compare_with_robot(grid: GridMap | None, robot_map: dict) -> str | None:
     (the bottom of the image), -1 unknown, 0 free, 100 occupied.
     """
     if grid is None:
-        return "This site has no map to compare against."
+        return t("map.no_map")
     if abs(robot_map["resolution"] - grid.resolution) > 1e-6:
-        return (f"The robot's map has {robot_map['resolution']:.3f} m cells, "
-                f"this one {grid.resolution:.3f} m.")
+        return t("map.resolution", theirs=num(robot_map["resolution"], 3),
+                 mine=num(grid.resolution, 3))
     if (robot_map["width"], robot_map["height"]) != (grid.width, grid.height):
-        return (f"The robot's map is {robot_map['width']}x{robot_map['height']} "
-                f"cells, this one {grid.width}x{grid.height}.")
+        return t("map.size", theirs=f"{robot_map['width']}×{robot_map['height']}",
+                 mine=f"{grid.width}×{grid.height}")
     ox, oy = robot_map["origin"]
     if abs(ox - grid.origin[0]) > 1e-3 or abs(oy - grid.origin[1]) > 1e-3:
-        return "The two maps start at different origins."
+        return t("map.origin")
 
     data = robot_map["data"]
     if len(data) != grid.width * grid.height:
-        return "The robot sent a map of the wrong length."
+        return t("map.length")
     same = 0
     for row in range(grid.height):
         mine = grid.cells[(grid.height - 1 - row) * grid.width:(grid.height - row) * grid.width]
@@ -413,7 +412,7 @@ def compare_with_robot(grid: GridMap | None, robot_map: dict) -> str | None:
             same += c == (1 if d < 0 else 2 if d >= 65 else 0 if d <= 25 else 1)
     share = same / len(data)
     if share < MAP_MATCH:
-        return f"Only {share:.0%} of the two maps agree."
+        return t("map.agree", share=percent(share))
     return None
 
 
@@ -422,7 +421,7 @@ def load_grid(yaml_path: Path) -> GridMap:
     try:
         meta = _read_map_yaml(yaml_path.read_text(encoding="utf-8"))
     except FileNotFoundError as e:
-        raise SiteError(f"Map file {yaml_path} not found") from e
+        raise SiteError(t("site.map_missing", path=yaml_path)) from e
 
     # map_saver writes the image path as it was on the robot, often absolute
     # (/root/maps/skola.pgm). The .pgm travels next to the .yaml.
@@ -435,7 +434,7 @@ def load_grid(yaml_path: Path) -> GridMap:
     occupied = float(meta.get("occupied_thresh", 0.65))
     free = float(meta.get("free_thresh", 0.25))
     if res <= 0:
-        raise SiteError(f"{yaml_path}: resolution must be positive")
+        raise SiteError(t("site.map_resolution", path=yaml_path))
 
     # map_saver writes unknown cells as exactly 205 in trinary mode. Read
     # through the thresholds alone, 205 is a probability of 0.196 — under
@@ -459,32 +458,34 @@ def load_grid(yaml_path: Path) -> GridMap:
 # --------------------------------------------------------------------------- #
 
 def _name(value, what: str) -> str:
+    """what: 'site', 'place' or 'zone'."""
     if not isinstance(value, str) or not value.strip():
-        raise SiteError(f"Every {what} needs a name.")
+        raise SiteError(t(f"site.name_missing.{what}"))
     value = " ".join(value.split())
     if len(value) > MAX_NAME:
-        raise SiteError(f"The {what} name {value!r} is longer than {MAX_NAME} characters.")
+        raise SiteError(t(f"site.name_long.{what}", name=value, n=MAX_NAME))
     return value
 
 
 def _point(x, y, where: str) -> Point:
     if isinstance(x, bool) or isinstance(y, bool):
-        raise SiteError(f"Coordinates of {where} must be numbers.")
+        raise SiteError(t("site.coords_numbers", where=where))
     try:
         fx, fy = float(x), float(y)
     except (TypeError, ValueError) as e:
-        raise SiteError(f"Coordinates of {where} must be numbers.") from e
+        raise SiteError(t("site.coords_numbers", where=where)) from e
     if not (math.isfinite(fx) and math.isfinite(fy)):
-        raise SiteError(f"Coordinates of {where} must be finite.")
+        raise SiteError(t("site.coords_finite", where=where))
     return Point(fx, fy)
 
 
-def _inside_map(p: Point, grid: GridMap | None, what: str) -> None:
+def _inside_map(p: Point, grid: GridMap | None, what: str, name: str) -> None:
+    """what: 'place' or 'zone'."""
     if grid is None:
         return
     x0, y0, x1, y1 = grid.bounds
     if not (x0 <= p.x <= x1 and y0 <= p.y <= y1):
-        raise SiteError(f"{what} lies outside the map.")
+        raise SiteError(t(f"site.outside.{what}", name=name))
 
 
 def _area(points: list[Point]) -> float:
@@ -552,7 +553,7 @@ def _read_map_yaml(text: str) -> dict:
             meta[key] = value
     for key in ("image", "resolution", "origin"):
         if key not in meta:
-            raise SiteError(f"Map YAML has no {key!r}")
+            raise SiteError(t("site.map_key", key=key))
     return meta
 
 
@@ -561,7 +562,7 @@ def _read_pgm(path: Path) -> tuple[int, int, int, bytes]:
     try:
         data = path.read_bytes()
     except FileNotFoundError as e:
-        raise SiteError(f"Map image {path} not found") from e
+        raise SiteError(t("site.image_missing", path=path)) from e
 
     tokens: list[bytes] = []
     i = 0
@@ -579,13 +580,13 @@ def _read_pgm(path: Path) -> tuple[int, int, int, bytes]:
     i += 1  # the single whitespace byte before the pixels
 
     if tokens[0] != b"P5":
-        raise SiteError(f"{path} is not a binary PGM (P5)")
+        raise SiteError(t("site.not_pgm", path=path))
     width, height, maxval = (int(t) for t in tokens[1:])
     if maxval > 255:
-        raise SiteError(f"{path} uses 16-bit pixels, which map_saver never writes")
+        raise SiteError(t("site.pgm_16bit", path=path))
     pixels = data[i:i + width * height]
     if len(pixels) != width * height:
-        raise SiteError(f"{path} is shorter than its header says")
+        raise SiteError(t("site.pgm_short", path=path))
     return width, height, maxval, pixels
 
 

@@ -1,0 +1,16 @@
+{
+  "name": "Škola",
+  "map": "map.yaml",
+  "places": [
+    {"name": "start", "x": 0.0, "y": 0.0},
+    {"name": "prvni dvere", "x": 12.585, "y": 0.675},
+    {"name": "posledni dvere", "x": 1.176, "y": 0.925},
+    {"name": "druhe dvere", "x": 7.036, "y": 0.925},
+    {"name": "treti dvere", "x": 2.111, "y": -0.592},
+    {"name": "akc", "x": -1.089, "y": -0.488}
+  ],
+  "zones": [
+    {"name": "lavicka", "kind": "forbidden",
+     "polygon": [[-2.502, 0.343], [-0.653, 0.364], [-0.715, -0.634], [-2.585, -0.655]]}
+  ]
+}
