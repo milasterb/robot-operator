@@ -17,7 +17,7 @@ class LogEntry:
 
 
 class Gate:
-    """Deterministic safety gate. No model, no randomness.
+    """Deterministic safety gate, no model, no random choice.
 
     The same state and proposal always produce the same verdict, apart from
     hysteresis, which depends on the previous verdict only.
